@@ -1,0 +1,379 @@
+- sku: "TSH-PREM-001"
+  name: "Premium Cotton Tee"
+  category: "apparel"
+  list_price: 500
+  description: "100% combed organic cotton crew neck t-shirt with reinforced stitching."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 240
+  tags: ["bestseller", "apparel", "high-margin"]
+
+- sku: "JAC-LEATH-001"
+  name: "Genuine Leather Biker Jacket"
+  category: "apparel"
+  list_price: 8000
+  description: "Handcrafted full-grain leather jacket with heavy-duty YKK zippers."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 45
+  tags: ["premium", "outerwear", "high-margin"]
+
+- sku: "AUD-HDPH-001"
+  name: "Studio Wireless ANC Headphones"
+  category: "electronics"
+  list_price: 12000
+  description: "Active noise cancelling wireless headphones with 40h battery life."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 80
+  tags: ["audio", "flagship", "high-margin"]
+
+- sku: "SWR-CRYST-001"
+  name: "Handcrafted Crystal Flower Vase"
+  category: "homeware"
+  list_price: 4500
+  description: "Blow-molded mouth-cut crystal glass vase with gold rim detailing."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 60
+  tags: ["decor", "luxury", "high-margin"]
+
+- sku: "FRG-LUX-001"
+  name: "Luxury Eau De Parfum 100ml"
+  category: "accessories"
+  list_price: 6000
+  description: "Artisanal french fragrance with amber, sandalwood, and bergamot notes."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 110
+  tags: ["fragrance", "gifting", "high-margin"]
+
+- sku: "MBL-FLAG-001"
+  name: "Flagship Smartphone 256GB"
+  category: "electronics"
+  list_price: 75000
+  description: "Next-gen processor, AMOLED 120Hz display, and triple camera array."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 30
+  tags: ["mobile", "flagship", "razor-thin-margin"]
+
+- sku: "GPM-RAM-001"
+  name: "DDR5 32GB Desktop RAM Kit"
+  category: "electronics"
+  list_price: 14000
+  description: "Dual-channel 6000MHz memory modules with aluminum heatspreaders."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 50
+  tags: ["computer-parts", "razor-thin-margin"]
+
+- sku: "SLR-PANEL-001"
+  name: "400W Monocrystalline Solar Panel"
+  category: "electronics"
+  list_price: 18000
+  description: "High-efficiency photovoltaic solar panel with tempered glass coating."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 25
+  tags: ["energy", "razor-thin-margin"]
+
+- sku: "CPU-CHIP-001"
+  name: "Octa-Core Desktop Processor"
+  category: "electronics"
+  list_price: 32000
+  description: "High-performance 5.0GHz unlocked desktop CPU."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 40
+  tags: ["computer-parts", "razor-thin-margin"]
+
+- sku: "GLD-COIN-001"
+  name: "24K Gold Minted Bullion Coin 5g"
+  category: "accessories"
+  list_price: 42000
+  description: "99.99% pure hallmarked investment grade gold bullion coin."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 15
+  tags: ["precious-metals", "razor-thin-margin"]
+
+- sku: "DRS-SUM-001"
+  name: "Summer Floral Print Sundress"
+  category: "apparel"
+  list_price: 2500
+  description: "Lightweight breathable linen sundress with tropical floral prints."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 150
+  tags: ["clearance", "aged-inventory"]
+
+- sku: "FTW-SNK-001"
+  name: "Retro High-Top Canvas Sneakers"
+  category: "apparel"
+  list_price: 3200
+  description: "Classic vulcanized rubber sole casual sneakers."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 180
+  tags: ["clearance", "aged-inventory"]
+
+- sku: "HME-FAN-001"
+  name: "Tower Oscillating Room Fan"
+  category: "homeware"
+  list_price: 4000
+  description: "3-speed quiet oscillation fan with remote control timer."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 90
+  tags: ["appliances", "aged-inventory"]
+
+- sku: "ACC-BAG-001"
+  name: "Vintage Canvas Duffle Travel Bag"
+  category: "accessories"
+  list_price: 4800
+  description: "Water-resistant heavy canvas weekender bag with leather straps."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 110
+  tags: ["travel", "aged-inventory"]
+
+- sku: "TOY-RC-001"
+  name: "Stunt RC 4WD Monster Truck"
+  category: "toys"
+  list_price: 2800
+  description: "All-terrain remote controlled truck with rechargeable battery."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 130
+  tags: ["toys", "aged-inventory"]
+
+- sku: "FOD-PRM-001"
+  name: "Organic Artisanal Cheese Wheel 1kg"
+  category: "food"
+  list_price: 1200
+  description: "Aged mountain farm gouda cheese wheel. Fresh stock nearing expiry."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 60
+  tags: ["perishable", "expiring-soon"]
+
+- sku: "MED-VIT-001"
+  name: "Multivitamin Complex 90 Tablets"
+  category: "health"
+  list_price: 1500
+  description: "Essential daily multivitamin & mineral dietary supplement."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 85
+  tags: ["wellness", "expiring-soon"]
+
+- sku: "CHM-CLN-001"
+  name: "Eco Multi-Surface Sanitizer 5L"
+  category: "homeware"
+  list_price: 800
+  description: "Plant-derived bio-degradable multi-surface cleaning solution."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 70
+  tags: ["cleaning", "expiring-soon"]
+
+- sku: "KIT-MUG-001"
+  name: "Ceramic Coffee Mug 350ml"
+  category: "homeware"
+  list_price: 400
+  description: "Matte finish ceramic mug suitable for microwave and dishwasher."
+  bundle_group: "BUNDLE-COFFEE-MUG"
+  substitute_of: null
+  stock_qty: 200
+  tags: ["kitchen", "bundle-item"]
+
+- sku: "KIT-COF-001"
+  name: "Artisanal Whole Coffee Beans 500g"
+  category: "food"
+  list_price: 700
+  description: "Single-origin Arabica roasted coffee beans."
+  bundle_group: "BUNDLE-COFFEE-MUG"
+  substitute_of: null
+  stock_qty: 180
+  tags: ["beverage", "bundle-item"]
+
+- sku: "TEC-KBD-001"
+  name: "RGB Mechanical Gaming Keyboard"
+  category: "electronics"
+  list_price: 4500
+  description: "Hot-swappable mechanical switches with per-key RGB backlight."
+  bundle_group: "BUNDLE-DESK-SETUP"
+  substitute_of: null
+  stock_qty: 90
+  tags: ["peripherals", "bundle-item"]
+
+- sku: "TEC-MSE-001"
+  name: "Ergonomic Wireless Optical Mouse"
+  category: "electronics"
+  list_price: 2500
+  description: "Dual-mode Bluetooth & 2.4GHz wireless precision mouse."
+  bundle_group: "BUNDLE-DESK-SETUP"
+  substitute_of: null
+  stock_qty: 120
+  tags: ["peripherals", "bundle-item"]
+
+- sku: "TEC-PAD-001"
+  name: "Extended Stitched Desk Mat 90x40cm"
+  category: "electronics"
+  list_price: 1200
+  description: "Micro-texture cloth surface with anti-slip rubber base."
+  bundle_group: "BUNDLE-DESK-SETUP"
+  substitute_of: null
+  stock_qty: 160
+  tags: ["accessories", "bundle-item"]
+
+- sku: "TSH-STD-001"
+  name: "Standard Cotton Crew Tee"
+  category: "apparel"
+  list_price: 380
+  description: "Everyday regular fit cotton t-shirt."
+  bundle_group: null
+  substitute_of: "TSH-PREM-001"
+  stock_qty: 300
+  tags: ["basics", "substitute-item"]
+
+- sku: "AUD-EAR-001"
+  name: "Standard 3.5mm Wired Earphones"
+  category: "electronics"
+  list_price: 1200
+  description: "Stereo wired in-ear earphones with inline mic."
+  bundle_group: null
+  substitute_of: "AUD-HDPH-001"
+  stock_qty: 220
+  tags: ["audio", "substitute-item"]
+
+- sku: "TEC-MSE-STD"
+  name: "Standard Wired USB Optical Mouse"
+  category: "electronics"
+  list_price: 800
+  description: "Plug-and-play USB wired optical mouse."
+  bundle_group: null
+  substitute_of: "TEC-MSE-001"
+  stock_qty: 250
+  tags: ["peripherals", "substitute-item"]
+
+- sku: "HOM-BLN-001"
+  name: "Microfiber King Size Blanket"
+  category: "homeware"
+  list_price: 3200
+  description: "Ultra-soft plush microfiber winter blanket."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 75
+  tags: ["bedding", "mid-margin"]
+
+- sku: "HOM-PLW-001"
+  name: "Memory Foam Bed Pillow Pair"
+  category: "homeware"
+  list_price: 2400
+  description: "Ergonomic contouring neck support pillows set of 2."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 90
+  tags: ["bedding", "mid-margin"]
+
+- sku: "KIT-BLN-001"
+  name: "Nutri-Extract Countertop Blender 900W"
+  category: "homeware"
+  list_price: 3800
+  description: "High-torque multi-blade blender for smoothies and shakes."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 65
+  tags: ["kitchen", "mid-margin"]
+
+- sku: "KIT-KNF-001"
+  name: "German Steel Chef Knife 8-Inch"
+  category: "homeware"
+  list_price: 2200
+  description: "High-carbon stainless steel forged kitchen chef knife."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 85
+  tags: ["kitchen", "mid-margin"]
+
+- sku: "SPT-MAT-001"
+  name: "Non-Slip Alignment Yoga Mat 6mm"
+  category: "sports"
+  list_price: 1800
+  description: "Eco-friendly TPE yoga mat with laser guide lines."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 110
+  tags: ["fitness", "mid-margin"]
+
+- sku: "SPT-DBL-001"
+  name: "Adjustable Cast Iron Dumbbell Set 20kg"
+  category: "sports"
+  list_price: 5500
+  description: "Heavy duty spin-lock dumbbell weights with carry case."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 40
+  tags: ["fitness", "mid-margin"]
+
+- sku: "AUT-CHG-001"
+  name: "Dual Port Fast Car Charger 65W"
+  category: "electronics"
+  list_price: 1500
+  description: "USB-C PD & USB-A QC fast car charging adapter."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 140
+  tags: ["automotive", "mid-margin"]
+
+- sku: "AUT-HLD-001"
+  name: "Magnetic Air Vent Phone Mount"
+  category: "electronics"
+  list_price: 900
+  description: "Strong neodymium magnet car phone holder."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 170
+  tags: ["automotive", "mid-margin"]
+
+- sku: "OFF-CHR-001"
+  name: "Ergonomic Mesh Swivel Office Chair"
+  category: "furniture"
+  list_price: 9500
+  description: "Breathable mesh back, adjustable lumbar support & armrests."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 35
+  tags: ["furniture", "mid-margin"]
+
+- sku: "OFF-LAM-001"
+  name: "LED Dimmable Eye-Care Desk Lamp"
+  category: "homeware"
+  list_price: 2100
+  description: "Touch control LED lamp with wireless phone charging pad."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 95
+  tags: ["lighting", "mid-margin"]
+
+- sku: "LGG-TRV-001"
+  name: "Hard-Shell Cabin Suitcase 20in"
+  category: "accessories"
+  list_price: 5200
+  description: "Polycarbonate scratch-resistant spinner luggage with TSA lock."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 55
+  tags: ["travel", "mid-margin"]
+
+- sku: "LGG-PAS-001"
+  name: "RFID Blocking Leather Passport Wallet"
+  category: "accessories"
+  list_price: 1100
+  description: "Genuine leather travel organizer for passport, cards & currency."
+  bundle_group: null
+  substitute_of: null
+  stock_qty: 130
+  tags: ["travel", "mid-margin"]

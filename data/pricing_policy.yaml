@@ -1,0 +1,575 @@
+- sku: "TSH-PREM-001"
+  cost_price: 220
+  floor_price: 260
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 49, discount_pct: 0 }
+    - { min_qty: 50, max_qty: 199, discount_pct: 6 }
+    - { min_qty: 200, max_qty: 499, discount_pct: 10 }
+    - { min_qty: 500, max_qty: null, discount_pct: 14 }
+  inventory_age_days: 12
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 4
+  urgency_flex_pct: 2
+  max_total_discount_pct: 20
+
+- sku: "JAC-LEATH-001"
+  cost_price: 3600
+  floor_price: 4200
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 9, discount_pct: 0 }
+    - { min_qty: 10, max_qty: 49, discount_pct: 10 }
+    - { min_qty: 50, max_qty: null, discount_pct: 18 }
+  inventory_age_days: 20
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 5
+  urgency_flex_pct: 3
+  max_total_discount_pct: 25
+
+- sku: "AUD-HDPH-001"
+  cost_price: 5000
+  floor_price: 6000
+  margin_floor_pct: 20
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 4, discount_pct: 0 }
+    - { min_qty: 5, max_qty: 19, discount_pct: 10 }
+    - { min_qty: 20, max_qty: null, discount_pct: 20 }
+  inventory_age_days: 15
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 5
+  urgency_flex_pct: 3
+  max_total_discount_pct: 25
+
+- sku: "SWR-CRYST-001"
+  cost_price: 1800
+  floor_price: 2200
+  margin_floor_pct: 20
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 9, discount_pct: 0 }
+    - { min_qty: 10, max_qty: 29, discount_pct: 12 }
+    - { min_qty: 30, max_qty: null, discount_pct: 20 }
+  inventory_age_days: 30
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 6
+  urgency_flex_pct: 4
+  max_total_discount_pct: 25
+
+- sku: "FRG-LUX-001"
+  cost_price: 2400
+  floor_price: 2900
+  margin_floor_pct: 20
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 4, discount_pct: 0 }
+    - { min_qty: 5, max_qty: 19, discount_pct: 10 }
+    - { min_qty: 20, max_qty: null, discount_pct: 18 }
+  inventory_age_days: 45
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 5
+  urgency_flex_pct: 3
+  max_total_discount_pct: 25
+
+- sku: "MBL-FLAG-001"
+  cost_price: 66000
+  floor_price: 68000
+  margin_floor_pct: 3
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 4, discount_pct: 0 }
+    - { min_qty: 5, max_qty: null, discount_pct: 2 }
+  inventory_age_days: 10
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 1
+  urgency_flex_pct: 1
+  max_total_discount_pct: 5
+
+- sku: "GPM-RAM-001"
+  cost_price: 12300
+  floor_price: 12800
+  margin_floor_pct: 3
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 9, discount_pct: 0 }
+    - { min_qty: 10, max_qty: null, discount_pct: 2 }
+  inventory_age_days: 14
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 1
+  urgency_flex_pct: 1
+  max_total_discount_pct: 5
+
+- sku: "SLR-PANEL-001"
+  cost_price: 15800
+  floor_price: 16400
+  margin_floor_pct: 3.5
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 9, discount_pct: 0 }
+    - { min_qty: 10, max_qty: null, discount_pct: 3 }
+  inventory_age_days: 25
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 1
+  urgency_flex_pct: 1
+  max_total_discount_pct: 6
+
+- sku: "CPU-CHIP-001"
+  cost_price: 28200
+  floor_price: 29200
+  margin_floor_pct: 3.5
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 4, discount_pct: 0 }
+    - { min_qty: 5, max_qty: null, discount_pct: 2 }
+  inventory_age_days: 8
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 1
+  urgency_flex_pct: 1
+  max_total_discount_pct: 5
+
+- sku: "GLD-COIN-001"
+  cost_price: 39500
+  floor_price: 40200
+  margin_floor_pct: 1.5
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 9, discount_pct: 0 }
+    - { min_qty: 10, max_qty: null, discount_pct: 1.5 }
+  inventory_age_days: 5
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 0.5
+  urgency_flex_pct: 0.5
+  max_total_discount_pct: 3
+
+- sku: "DRS-SUM-001"
+  cost_price: 1000
+  floor_price: 1300
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 9, discount_pct: 0 }
+    - { min_qty: 10, max_qty: null, discount_pct: 10 }
+  inventory_age_days: 115
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 8
+  urgency_flex_pct: 3
+  max_total_discount_pct: 20
+
+- sku: "FTW-SNK-001"
+  cost_price: 1300
+  floor_price: 1600
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 9, discount_pct: 0 }
+    - { min_qty: 10, max_qty: null, discount_pct: 8 }
+  inventory_age_days: 130
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 7
+  urgency_flex_pct: 3
+  max_total_discount_pct: 20
+
+- sku: "HME-FAN-001"
+  cost_price: 1800
+  floor_price: 2200
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 9, discount_pct: 0 }
+    - { min_qty: 10, max_qty: null, discount_pct: 8 }
+  inventory_age_days: 98
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 6
+  urgency_flex_pct: 2
+  max_total_discount_pct: 18
+
+- sku: "ACC-BAG-001"
+  cost_price: 2000
+  floor_price: 2500
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 9, discount_pct: 0 }
+    - { min_qty: 10, max_qty: null, discount_pct: 10 }
+  inventory_age_days: 140
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 8
+  urgency_flex_pct: 3
+  max_total_discount_pct: 22
+
+- sku: "TOY-RC-001"
+  cost_price: 1100
+  floor_price: 1400
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 9, discount_pct: 0 }
+    - { min_qty: 10, max_qty: null, discount_pct: 10 }
+  inventory_age_days: 105
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 7
+  urgency_flex_pct: 3
+  max_total_discount_pct: 20
+
+- sku: "FOD-PRM-001"
+  cost_price: 500
+  floor_price: 650
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 4, discount_pct: 0 }
+    - { min_qty: 5, max_qty: null, discount_pct: 10 }
+  inventory_age_days: 20
+  expiry_date: "2026-08-30"
+  inventory_discretion:
+    age_threshold_days: 15
+    extra_discount_pct: 12
+  urgency_flex_pct: 5
+  max_total_discount_pct: 25
+
+- sku: "MED-VIT-001"
+  cost_price: 600
+  floor_price: 750
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 4, discount_pct: 0 }
+    - { min_qty: 5, max_qty: null, discount_pct: 10 }
+  inventory_age_days: 40
+  expiry_date: "2026-09-01"
+  inventory_discretion:
+    age_threshold_days: 30
+    extra_discount_pct: 10
+  urgency_flex_pct: 4
+  max_total_discount_pct: 25
+
+- sku: "CHM-CLN-001"
+  cost_price: 320
+  floor_price: 400
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 4, discount_pct: 0 }
+    - { min_qty: 5, max_qty: null, discount_pct: 8 }
+  inventory_age_days: 30
+  expiry_date: "2026-08-31"
+  inventory_discretion:
+    age_threshold_days: 20
+    extra_discount_pct: 10
+  urgency_flex_pct: 4
+  max_total_discount_pct: 22
+
+- sku: "KIT-MUG-001"
+  cost_price: 160
+  floor_price: 200
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 9, discount_pct: 0 }
+    - { min_qty: 10, max_qty: null, discount_pct: 8 }
+  inventory_age_days: 15
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 4
+  urgency_flex_pct: 2
+  max_total_discount_pct: 15
+
+- sku: "KIT-COF-001"
+  cost_price: 280
+  floor_price: 350
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 9, discount_pct: 0 }
+    - { min_qty: 10, max_qty: null, discount_pct: 8 }
+  inventory_age_days: 20
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 4
+  urgency_flex_pct: 2
+  max_total_discount_pct: 15
+
+- sku: "TEC-KBD-001"
+  cost_price: 2000
+  floor_price: 2400
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 4, discount_pct: 0 }
+    - { min_qty: 5, max_qty: null, discount_pct: 10 }
+  inventory_age_days: 18
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 5
+  urgency_flex_pct: 2
+  max_total_discount_pct: 18
+
+- sku: "TEC-MSE-001"
+  cost_price: 1100
+  floor_price: 1350
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 4, discount_pct: 0 }
+    - { min_qty: 5, max_qty: null, discount_pct: 8 }
+  inventory_age_days: 15
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 4
+  urgency_flex_pct: 2
+  max_total_discount_pct: 16
+
+- sku: "TEC-PAD-001"
+  cost_price: 480
+  floor_price: 600
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 4, discount_pct: 0 }
+    - { min_qty: 5, max_qty: null, discount_pct: 10 }
+  inventory_age_days: 10
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 4
+  urgency_flex_pct: 2
+  max_total_discount_pct: 16
+
+- sku: "TSH-STD-001"
+  cost_price: 170
+  floor_price: 200
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 9, discount_pct: 0 }
+    - { min_qty: 10, max_qty: null, discount_pct: 8 }
+  inventory_age_days: 12
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 4
+  urgency_flex_pct: 2
+  max_total_discount_pct: 15
+
+- sku: "AUD-EAR-001"
+  cost_price: 520
+  floor_price: 620
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 9, discount_pct: 0 }
+    - { min_qty: 10, max_qty: null, discount_pct: 8 }
+  inventory_age_days: 15
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 4
+  urgency_flex_pct: 2
+  max_total_discount_pct: 15
+
+- sku: "TEC-MSE-STD"
+  cost_price: 350
+  floor_price: 420
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 9, discount_pct: 0 }
+    - { min_qty: 10, max_qty: null, discount_pct: 8 }
+  inventory_age_days: 10
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 4
+  urgency_flex_pct: 2
+  max_total_discount_pct: 15
+
+- sku: "HOM-BLN-001"
+  cost_price: 1400
+  floor_price: 1700
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 9, discount_pct: 0 }
+    - { min_qty: 10, max_qty: null, discount_pct: 8 }
+  inventory_age_days: 35
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 5
+  urgency_flex_pct: 2
+  max_total_discount_pct: 16
+
+- sku: "HOM-PLW-001"
+  cost_price: 1050
+  floor_price: 1300
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 9, discount_pct: 0 }
+    - { min_qty: 10, max_qty: null, discount_pct: 8 }
+  inventory_age_days: 28
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 5
+  urgency_flex_pct: 2
+  max_total_discount_pct: 16
+
+- sku: "KIT-BLN-001"
+  cost_price: 1650
+  floor_price: 2000
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 9, discount_pct: 0 }
+    - { min_qty: 10, max_qty: null, discount_pct: 10 }
+  inventory_age_days: 42
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 5
+  urgency_flex_pct: 2
+  max_total_discount_pct: 18
+
+- sku: "KIT-KNF-001"
+  cost_price: 950
+  floor_price: 1150
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 9, discount_pct: 0 }
+    - { min_qty: 10, max_qty: null, discount_pct: 8 }
+  inventory_age_days: 22
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 4
+  urgency_flex_pct: 2
+  max_total_discount_pct: 15
+
+- sku: "SPT-MAT-001"
+  cost_price: 780
+  floor_price: 950
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 9, discount_pct: 0 }
+    - { min_qty: 10, max_qty: null, discount_pct: 10 }
+  inventory_age_days: 19
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 5
+  urgency_flex_pct: 2
+  max_total_discount_pct: 18
+
+- sku: "SPT-DBL-001"
+  cost_price: 2400
+  floor_price: 2900
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 4, discount_pct: 0 }
+    - { min_qty: 5, max_qty: null, discount_pct: 10 }
+  inventory_age_days: 33
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 5
+  urgency_flex_pct: 2
+  max_total_discount_pct: 18
+
+- sku: "AUT-CHG-001"
+  cost_price: 650
+  floor_price: 780
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 9, discount_pct: 0 }
+    - { min_qty: 10, max_qty: null, discount_pct: 8 }
+  inventory_age_days: 14
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 4
+  urgency_flex_pct: 2
+  max_total_discount_pct: 15
+
+- sku: "AUT-HLD-001"
+  cost_price: 390
+  floor_price: 470
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 9, discount_pct: 0 }
+    - { min_qty: 10, max_qty: null, discount_pct: 8 }
+  inventory_age_days: 11
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 4
+  urgency_flex_pct: 2
+  max_total_discount_pct: 15
+
+- sku: "OFF-CHR-001"
+  cost_price: 4200
+  floor_price: 5000
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 4, discount_pct: 0 }
+    - { min_qty: 5, max_qty: null, discount_pct: 12 }
+  inventory_age_days: 26
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 5
+  urgency_flex_pct: 3
+  max_total_discount_pct: 20
+
+- sku: "OFF-LAM-001"
+  cost_price: 920
+  floor_price: 1100
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 9, discount_pct: 0 }
+    - { min_qty: 10, max_qty: null, discount_pct: 8 }
+  inventory_age_days: 17
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 4
+  urgency_flex_pct: 2
+  max_total_discount_pct: 15
+
+- sku: "LGG-TRV-001"
+  cost_price: 2200
+  floor_price: 2700
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 4, discount_pct: 0 }
+    - { min_qty: 5, max_qty: null, discount_pct: 10 }
+  inventory_age_days: 29
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 5
+  urgency_flex_pct: 2
+  max_total_discount_pct: 18
+
+- sku: "LGG-PAS-001"
+  cost_price: 480
+  floor_price: 580
+  margin_floor_pct: 15
+  quantity_tiers:
+    - { min_qty: 1, max_qty: 9, discount_pct: 0 }
+    - { min_qty: 10, max_qty: null, discount_pct: 8 }
+  inventory_age_days: 16
+  expiry_date: null
+  inventory_discretion:
+    age_threshold_days: 90
+    extra_discount_pct: 4
+  urgency_flex_pct: 2
+  max_total_discount_pct: 15
