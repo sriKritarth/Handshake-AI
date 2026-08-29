@@ -27,7 +27,7 @@ def _find_best_tier(quantity: int, tiers: list[QuantityTier]) -> QuantityTier | 
     """Return the highest applicable tier for the given quantity, or None."""
     best: QuantityTier | None = None
     for tier in tiers:
-        if (quantity >= tier.min_qty) and (quantity <= tier.max_qty or tier.max_qty is None): 
+        if (quantity >= tier.min_qty) and (tier.max_qty is None or quantity <= tier.max_qty): 
             # This tier matches; keep it (last matching = highest applicable)
             best = tier
     return best

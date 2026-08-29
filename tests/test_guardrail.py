@@ -164,7 +164,7 @@ class TestOfferModel:
 # ===========================================================================
 
 class TestRuleResult:
-    def test_effective_price_returns_adjusted_when_set(self):
+    def test_adjusted_price_set_when_clamped(self):
         r = RuleResult(
             passed=False,
             rule_name="floor_price",
@@ -172,9 +172,10 @@ class TestRuleResult:
             adjusted_price=260.0,
             reason="below_floor_price",
         )
-        assert r.effective_price == 260.0
+        # The engine reads adjusted_price directly; None means no change.
+        assert r.adjusted_price == 260.0
 
-    def test_effective_price_returns_original_when_no_adjustment(self):
+    def test_adjusted_price_is_none_when_no_change(self):
         r = RuleResult(
             passed=True,
             rule_name="floor_price",
@@ -182,7 +183,8 @@ class TestRuleResult:
             adjusted_price=None,
             reason="ok",
         )
-        assert r.effective_price == 350.0
+        # None signals the engine to leave current_price unchanged.
+        assert r.adjusted_price is None
 
     def test_requires_merchant_approval_defaults_false(self):
         r = RuleResult(
@@ -532,6 +534,9 @@ class TestGuardrailEngine:
         assert result.final_price == pytest.approx(450.0, abs=0.01)
         assert result.is_round_limit_final is False
         assert result.blocking_rule is None
+        # Clean pass-through: no rule changed the price, so deciding_rule is None.
+        # Phase 2 rationale: no justification needed (offer accepted as-is).
+        assert result.deciding_rule is None
 
     # --- Jailbreak simulation ---
 
@@ -564,8 +569,11 @@ class TestGuardrailEngine:
         # Final price is max-discount-clamped: 499 × (1 − 0.20) = 399.20
         assert result.final_price == pytest.approx(399.20, abs=0.01)
         assert result.passed is False
-        # First blocking rule in the waterfall is floor_price
+        # blocking_rule = FIRST rule that failed → floor_price (audit: "it was a jailbreak attempt")
         assert result.blocking_rule == "floor_price"
+        # deciding_rule = LAST rule that set the price → max_discount (rationale: quote ₹399.20)
+        # Phase 2 reads THIS field to pick the justification template, not blocking_rule.
+        assert result.deciding_rule == "max_discount"
         # MaxDiscountRule also fires → merchant approval required
         assert result.requires_merchant_approval is True
         # Verify floor_price rule is present in audit trail with correct clamp
@@ -615,6 +623,8 @@ class TestGuardrailEngine:
         assert result.requires_merchant_approval is True
         assert result.final_price >= standard_policy.floor_price
         assert result.final_price >= standard_policy.cost_price * 1.15   # margin respected
+        # deciding_rule is max_discount: the final number comes from that cap
+        assert result.deciding_rule == "max_discount"
 
     # --- Round limit ---
 

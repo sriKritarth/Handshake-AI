@@ -75,11 +75,6 @@ class RuleResult:
     reason: str
     requires_merchant_approval: bool = False
 
-    @property
-    def effective_price(self) -> float:
-        """The price to use downstream — adjusted if clamped, original otherwise."""
-        return self.adjusted_price if self.adjusted_price is not None else self.original_price
-
 
 # ---------------------------------------------------------------------------
 # PricingRule — abstract base for all rule subclasses

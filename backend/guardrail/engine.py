@@ -15,7 +15,12 @@ GuardrailResult (returned to callers):
   - final_price:                 The price after all rules have run.
   - passed:                      True only if every rule passed without clamping.
   - requires_merchant_approval:  True if any rule flagged for escalation.
-  - blocking_rule:               Name of the first rule that set passed=False (or None).
+  - blocking_rule:               Name of the FIRST rule that set passed=False (or None).
+                                 Use this for audit/logging ("who fired first").
+  - deciding_rule:               Name of the LAST rule that actually changed the price
+                                 (i.e. whose adjusted_price became final_price). Use this
+                                 for rationale templating — it's the rule whose number you
+                                 are quoting to the buyer.
   - rule_results:                Full ordered list of RuleResult for the audit log.
   - is_round_limit_final:        True when RoundLimitRule flagged round_limit_reached —
                                  caller should package this as the final take-it-or-leave-it offer.
@@ -47,7 +52,12 @@ class GuardrailResult:
         final_price:               Price after all rules have run (fully clamped/adjusted).
         passed:                    True only if no rule needed to clamp the price.
         requires_merchant_approval True if any rule flagged the offer for escalation.
-        blocking_rule:             Name of the first rule that set passed=False, or None.
+        blocking_rule:             Name of the FIRST rule that set passed=False, or None.
+                                   Audit field — tells you which rule fired first.
+        deciding_rule:             Name of the LAST rule that changed the price (i.e. whose
+                                   adjusted_price == final_price). Rationale field — this is
+                                   the rule whose number you quote to the buyer. None if no
+                                   rule needed to adjust the price (clean pass-through).
         rule_results:              Full ordered list of every rule's RuleResult (for audit).
         is_round_limit_final:      True when the session has reached max_rounds — the caller
                                    should present final_price as a take-it-or-leave-it offer.
@@ -57,6 +67,7 @@ class GuardrailResult:
     passed: bool
     requires_merchant_approval: bool
     blocking_rule: str | None
+    deciding_rule: str | None
     rule_results: list[RuleResult] = field(default_factory=list)
     is_round_limit_final: bool = False
 
@@ -143,6 +154,7 @@ class GuardrailEngine:
         current_price = offer.proposed_price
         rule_results: list[RuleResult] = []
         blocking_rule: str | None = None
+        deciding_rule: str | None = None
         requires_merchant_approval: bool = False
         is_round_limit_final: bool = False
 
@@ -153,22 +165,27 @@ class GuardrailEngine:
             result = rule.evaluate(waterfall_offer, policy)
             rule_results.append(result)
 
-            # Advance price through the waterfall
-            current_price = result.effective_price
+            # Advance price through the waterfall.
+            # Inline the adjusted-vs-original logic here; no property needed on RuleResult.
+            if result.adjusted_price is not None:
+                current_price = result.adjusted_price
+                # This rule produced the number we're now working with — it is
+                # the current candidate for deciding_rule.
+                deciding_rule = result.rule_name
 
             # Track merchant-approval requirement (any rule can set it)
             if result.requires_merchant_approval:
                 requires_merchant_approval = True
 
-            # Track the first blocking rule
+            # Track the FIRST rule that set passed=False (audit — "who fired first")
             if not result.passed and blocking_rule is None:
                 blocking_rule = result.rule_name
 
             # Detect round-limit final-offer flag
             if result.rule_name == "round_limit" and result.reason == "round_limit_reached":
                 is_round_limit_final = True
-                # remaining rules are skipped — final price is last_approved_price
-                # (adjusted_price from the round limit rule, already set as current_price)
+                # Short-circuit — remaining rules are skipped.
+                # final price is last_approved_price (already set as current_price above).
                 break
 
         # Update the round-limit rule's last_approved_price for the next round
@@ -182,6 +199,7 @@ class GuardrailEngine:
             passed=passed,
             requires_merchant_approval=requires_merchant_approval,
             blocking_rule=blocking_rule,
+            deciding_rule=deciding_rule,
             rule_results=rule_results,
             is_round_limit_final=is_round_limit_final,
         )
