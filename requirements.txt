@@ -4,3 +4,6 @@ uvicorn
 langgraph
 pytest
 langchain
+dotenv
+instructor
+instructor[groq]
