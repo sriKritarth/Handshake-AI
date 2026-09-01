@@ -751,3 +751,171 @@ def test_buyer_accepts_routing_rejects_invalid_states(
     with pytest.raises(Exception):
         service.accept_offer(session.id, buyer_id="buyer_invalid_acc")
 
+
+# ---------------------------------------------------------------------------
+# 7. Decision 3: PENDING_APPROVAL 30-Minute Timeout Auto-Reject
+# ---------------------------------------------------------------------------
+
+def test_pending_approval_timeout_auto_rejects_session(
+    sample_catalog_sku: Dict[str, Any],
+    sample_pricing_policy: Dict[str, Any],
+) -> None:
+    """
+    Decision 3: If merchant does not respond within 30 minutes,
+    PENDING_APPROVAL auto-transitions to REJECTED on next read.
+    """
+    repo = InMemorySessionRepository()
+    repo.save_catalog_sku(sample_catalog_sku)
+    repo.save_pricing_policy(sample_pricing_policy)
+
+    # LLM escalates to merchant approval (price in approval band)
+    mock_llm = MockDecisionLLMClient([
+        NegotiationDecision(
+            counter_price=415.0,
+            justification="Escalating for merchant review",
+            internal_reasoning="Price in approval band",
+            should_accept=False,
+            needs_approval=True,
+        )
+    ])
+
+    service = NegotiationSessionService(repo=repo, llm_client=mock_llm)
+    session = service.create_session(
+        buyer_id="buyer_timeout_test",
+        sku_code="SKU-1042",
+        quantity=100,
+    )
+
+    # Push session to PENDING_APPROVAL
+    move = BuyerMove(
+        quantity=100,
+        offered_price=415.0,
+        buyer_message="Best I can do",
+        accept_last_offer=False,
+    )
+    response = service.handle_buyer_move(session.id, move)
+    assert response.status == "PENDING_APPROVAL"
+
+    # Simulate time passing: set expires_at to 31 minutes ago
+    stored_session = repo.get_session(session.id)
+    stored_session.expires_at = datetime.now(timezone.utc) - timedelta(minutes=31)
+    repo.update_session(stored_session)
+
+    # Act: fetch session triggers lazy expiry check
+    fetched = service.get_session(session.id)
+
+    # Assert: auto-rejected
+    assert fetched.status == "REJECTED"
+
+    # Assert: audit log recorded the timeout event
+    audit_logs = repo.get_audit_logs(session.id)
+    timeout_log = [
+        log for log in audit_logs
+        if log["snapshot_data"].get("event_type") == "APPROVAL_TIMEOUT_REJECTED"
+    ]
+    assert len(timeout_log) == 1
+    assert "did not respond" in timeout_log[0]["snapshot_data"]["reason"]
+
+    # Assert: merchant_approvals row updated to TIMEOUT
+    approval = repo.get_merchant_approval(session.id)
+    assert approval is not None
+    assert approval["status"] == "TIMEOUT"
+
+
+def test_pending_approval_within_window_is_not_rejected(
+    sample_catalog_sku: Dict[str, Any],
+    sample_pricing_policy: Dict[str, Any],
+) -> None:
+    """
+    Negative test: PENDING_APPROVAL within the 30-minute window
+    should NOT be auto-rejected.
+    """
+    repo = InMemorySessionRepository()
+    repo.save_catalog_sku(sample_catalog_sku)
+    repo.save_pricing_policy(sample_pricing_policy)
+
+    mock_llm = MockDecisionLLMClient([
+        NegotiationDecision(
+            counter_price=415.0,
+            justification="Escalating",
+            internal_reasoning="In approval band",
+            should_accept=False,
+            needs_approval=True,
+        )
+    ])
+
+    service = NegotiationSessionService(repo=repo, llm_client=mock_llm)
+    session = service.create_session(
+        buyer_id="buyer_still_waiting",
+        sku_code="SKU-1042",
+        quantity=100,
+    )
+
+    move = BuyerMove(
+        quantity=100,
+        offered_price=415.0,
+        buyer_message="Waiting for your merchant",
+        accept_last_offer=False,
+    )
+    response = service.handle_buyer_move(session.id, move)
+    assert response.status == "PENDING_APPROVAL"
+
+    # Do NOT manipulate expires_at — it's still within window
+
+    # Act: fetch session
+    fetched = service.get_session(session.id)
+
+    # Assert: still PENDING_APPROVAL, not auto-rejected
+    assert fetched.status == "PENDING_APPROVAL"
+
+
+def test_merchant_responds_before_timeout_is_not_affected(
+    sample_catalog_sku: Dict[str, Any],
+    sample_pricing_policy: Dict[str, Any],
+) -> None:
+    """
+    If merchant approves before the 30-minute timeout,
+    session should transition to AGREED normally.
+    """
+    repo = InMemorySessionRepository()
+    repo.save_catalog_sku(sample_catalog_sku)
+    repo.save_pricing_policy(sample_pricing_policy)
+
+    mock_llm = MockDecisionLLMClient([
+        NegotiationDecision(
+            counter_price=415.0,
+            justification="Please check with your merchant",
+            internal_reasoning="In approval band",
+            should_accept=False,
+            needs_approval=True,
+        )
+    ])
+
+    service = NegotiationSessionService(repo=repo, llm_client=mock_llm)
+    session = service.create_session(
+        buyer_id="buyer_merchant_fast",
+        sku_code="SKU-1042",
+        quantity=100,
+    )
+
+    move = BuyerMove(
+        quantity=100,
+        offered_price=415.0,
+        buyer_message="Please check with your merchant",
+        accept_last_offer=False,
+    )
+    response = service.handle_buyer_move(session.id, move)
+    assert response.status == "PENDING_APPROVAL"
+
+    # Merchant approves within window (expires_at still in future)
+    decision = MerchantDecisionRequest(
+        decision="approve",
+        merchant_notes="Approved — good customer",
+    )
+    result = service.handle_merchant_decision(session.id, decision)
+
+    # Assert: AGREED, not affected by timeout logic
+    assert result.status == "AGREED"
+    assert result.payment_link_url is not None
+
+

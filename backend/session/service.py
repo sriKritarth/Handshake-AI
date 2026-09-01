@@ -175,9 +175,10 @@ class NegotiationSessionService:
         if not session:
             raise ValueError(f"Session '{session_id}' not found.")
 
+        now_utc = datetime.now(timezone.utc)
+
         # Lazy check-on-read: evaluate expiry if session is in FINAL_OFFER
         if session.status == "FINAL_OFFER" and session.expires_at:
-            now_utc = datetime.now(timezone.utc)
             if now_utc > session.expires_at:
                 fsm = NegotiationFSM(session)
                 fsm.lazy_expire()
@@ -189,6 +190,31 @@ class NegotiationSessionService:
                     to_state="EXPIRED",
                     actor="system",
                     details={"expired_at": session.expires_at.isoformat(), "checked_at": now_utc.isoformat()},
+                    event_id=None,
+                )
+
+        # Decision 3: lazy check-on-read for PENDING_APPROVAL 30-min timeout
+        elif session.status == "PENDING_APPROVAL" and session.expires_at:
+            if now_utc > session.expires_at:
+                fsm = NegotiationFSM(session)
+                fsm.approval_timeout()
+                self.repo.update_session(session)
+                self.repo.update_merchant_approval(
+                    session_id=session.id,
+                    status="TIMEOUT",
+                    notes="Auto-rejected: merchant did not respond within 30-minute window",
+                )
+                self._append_audit(
+                    session_id=session.id,
+                    event_type="APPROVAL_TIMEOUT_REJECTED",
+                    from_state="PENDING_APPROVAL",
+                    to_state="REJECTED",
+                    actor="system",
+                    details={
+                        "reason": "Merchant did not respond within 30-minute window",
+                        "expired_at": session.expires_at.isoformat(),
+                        "checked_at": now_utc.isoformat(),
+                    },
                     event_id=None,
                 )
 
@@ -378,16 +404,17 @@ class NegotiationSessionService:
             status_msg = f"Deal agreed at ₹{decision.counter_price:.2f}/unit. Payment link created."
 
         elif decision.needs_approval:
-            # Transition to PENDING_APPROVAL
+            # Transition to PENDING_APPROVAL with 30-minute expiry window (Decision 3)
             fsm.guardrail_escalates()
             session.pending_approval_price = decision.counter_price
+            session.expires_at = datetime.now(timezone.utc) + timedelta(minutes=30)
             self.repo.record_merchant_approval(
                 session_id=session.id,
                 requested_price=decision.counter_price,
                 status="PENDING",
                 notes=decision.internal_reasoning,
             )
-            status_msg = f"Proposed price of ₹{decision.counter_price:.2f} requires merchant escalation."
+            status_msg = f"Proposed price of ₹{decision.counter_price:.2f} requires merchant escalation. Merchant has 30 minutes to respond."
 
         elif session.current_round >= max_rounds:
             # Transition to FINAL_OFFER take-it-or-leave-it

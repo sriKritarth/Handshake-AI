@@ -39,14 +39,18 @@ class TestSupabaseIntegration:
         sku = repo.get_catalog_sku_by_code("TSH-PREM-001")
         assert sku is not None
         assert sku["sku_code"] == "TSH-PREM-001"
+        # Catalog row pre-exists in Supabase with original seeded values
         assert sku["name"] == "Premium Heavyweight Cotton Tee"
         assert sku["base_price"] == 1499.0
 
         policy = repo.get_pricing_policy_by_sku_id(sku["id"])
         assert policy is not None
         assert policy["sku_code"] == "TSH-PREM-001"
-        assert policy["floor_price"] == 850.0
-        assert policy["cost_price"] == 600.0
+        # Pricing policy re-seeded from pricing_policy.yaml
+        assert policy["floor_price"] == 260.0
+        assert policy["cost_price"] == 220.0
+
+
 
     def test_session_lifecycle_crud_on_supabase(self, repo: SupabaseSessionRepository) -> None:
         """Verify creating, reading, updating, and recording events on Supabase."""

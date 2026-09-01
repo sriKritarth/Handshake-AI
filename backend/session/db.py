@@ -200,6 +200,13 @@ class InMemorySessionRepository(BaseSessionRepository):
     def get_audit_logs(self, session_id: str) -> List[Dict[str, Any]]:
         return self.audit_logs.get(session_id, [])
 
+    def get_merchant_approval(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """Return the latest merchant_approvals row for the session (test helper)."""
+        entries = self.merchant_approvals.get(session_id, [])
+        return entries[-1] if entries else None
+
+
+
 
 class SupabaseSessionRepository(BaseSessionRepository):
     """Postgres repository accessing Supabase tables via postgrest / supabase-py client."""

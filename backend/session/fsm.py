@@ -38,6 +38,7 @@ class NegotiationStateMachine(StateMachine):
     merchant_approves = PENDING_APPROVAL.to(AGREED)
     merchant_declines = PENDING_APPROVAL.to(REJECTED)
     merchant_counters = PENDING_APPROVAL.to(IN_PROGRESS)
+    approval_timeout = PENDING_APPROVAL.to(REJECTED)
 
     accept_final_offer = FINAL_OFFER.to(AGREED)
     decline_final_offer = FINAL_OFFER.to(REJECTED)
@@ -102,3 +103,6 @@ class NegotiationFSM:
 
     def lazy_expire(self) -> None:
         self._trigger("lazy_expire")
+
+    def approval_timeout(self) -> None:
+        self._trigger("approval_timeout")
