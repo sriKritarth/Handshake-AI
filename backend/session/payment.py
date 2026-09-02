@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import uuid
+import razorpay
 from typing import Any, Dict, Optional
 
 
@@ -33,7 +34,6 @@ class RazorpayPaymentService:
         self._client = None
         if self.key_id and self.key_secret:
             try:
-                import razorpay
                 self._client = razorpay.Client(auth=(self.key_id, self.key_secret))
             except Exception:
                 self._client = None

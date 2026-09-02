@@ -32,16 +32,16 @@ from session.prompts import (
 class DefaultGroqDecisionClient:
     """Production Groq LLM client utilizing Instructor for NegotiationDecision structured output."""
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "llama-3.3-70b-versatile") -> None:
+    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None) -> None:
         self.api_key = api_key or os.environ.get("GROQ_API_KEY", "")
-        self.model = model
+        self.model = model or os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
         self._client = None
         if self.api_key:
             try:
                 import instructor
                 from groq import Groq
                 raw_client = Groq(api_key=self.api_key)
-                self._client = instructor.from_groq(raw_client)
+                self._client = instructor.from_groq(raw_client, mode=instructor.Mode.TOOLS)
             except Exception:
                 self._client = None
 

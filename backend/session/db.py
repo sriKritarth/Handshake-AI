@@ -220,7 +220,7 @@ class SupabaseSessionRepository(BaseSessionRepository):
         key = supabase_key or os.environ.get("SUPABASE_SECRET_KEY") or os.environ.get("SUPABASE_PUBLISHABLE_KEY", "")
         if not url or not key:
             raise ValueError("SUPABASE_URL and SUPABASE_SECRET_KEY / SUPABASE_PUBLISHABLE_KEY must be provided.")
-        self.client: Client = create_client(url, key, options=ClientOptions(httpx_client=httpx.Client()))
+        self.client: Client = create_client(url, key, options=ClientOptions(httpx_client=httpx.Client(timeout=httpx.Timeout(30.0, connect=10.0))))
 
     def _is_valid_uuid(self, val: str) -> bool:
         try:
@@ -246,12 +246,13 @@ class SupabaseSessionRepository(BaseSessionRepository):
         return res.data[0] if res.data else None
 
     def create_session(self, session: SessionRecord) -> SessionRecord:
+        db_status = "IN_PROGRESS" if session.status == "FINAL_OFFER" else session.status
         payload = {
             "id": session.id,
             "sku_id": session.sku_id,
             "buyer_id": session.buyer_id,
             "channel": session.channel,
-            "status": session.status,
+            "status": db_status,
             "current_round": session.current_round,
             "final_agreed_price": session.final_agreed_price,
             "expires_at": session.expires_at.isoformat() if session.expires_at else None,
@@ -262,26 +263,36 @@ class SupabaseSessionRepository(BaseSessionRepository):
         raise RuntimeError("Failed to create negotiation session in Supabase.")
 
     def get_session(self, session_id: str) -> Optional[SessionRecord]:
+        session_id = str(session_id).strip().strip("'\"")
+        if not self._is_valid_uuid(session_id):
+            return None
         res = self.client.table("negotiation_sessions").select("*").eq("id", session_id).execute()
         if not res.data:
             return None
         row = res.data[0]
         exp = datetime.fromisoformat(row["expires_at"]) if row.get("expires_at") else None
+        
+        # If stored as IN_PROGRESS but has final offer expiry and reached round 5, reflect as FINAL_OFFER in memory
+        status = row["status"]
+        if status == "IN_PROGRESS" and exp and row.get("current_round", 0) >= 5:
+            status = "FINAL_OFFER"
+
         return SessionRecord(
             id=row["id"],
             sku_id=row["sku_id"],
             buyer_id=row["buyer_id"],
             channel=row.get("channel", "CHAT"),
             quantity=row.get("quantity", 1),
-            status=row["status"],
+            status=status,
             current_round=row["current_round"],
             final_agreed_price=row.get("final_agreed_price"),
             expires_at=exp,
         )
 
     def update_session(self, session: SessionRecord) -> SessionRecord:
+        db_status = "IN_PROGRESS" if session.status == "FINAL_OFFER" else session.status
         payload = {
-            "status": session.status,
+            "status": db_status,
             "current_round": session.current_round,
             "final_agreed_price": session.final_agreed_price,
             "expires_at": session.expires_at.isoformat() if session.expires_at else None,
@@ -302,7 +313,7 @@ class SupabaseSessionRepository(BaseSessionRepository):
             "is_rule_passed": event.is_rule_passed,
             "passed_rules": event.passed_rules or [],
             "violated_rules": event.violated_rules or [],
-            "rule_reason": event.rule_reason or "",
+            "rule_reason": (event.rule_reason or "")[:100],
             "public_justification": event.public_justification or "",
         }
         self.client.table("offer_events").insert(payload).execute()
@@ -350,7 +361,31 @@ class SupabaseSessionRepository(BaseSessionRepository):
         return res.data[0] if res.data else payload
 
     def append_audit_log(self, log_entry: Dict[str, Any]) -> None:
-        self.client.table("audit_logs").insert(log_entry).execute()
+        payload = dict(log_entry)
+        if payload.get("event_id") is None:
+            # Postgres audit_logs table has a not-null foreign key on event_id -> offer_events.id
+            events = self.get_offer_events(payload["session_id"])
+            if events:
+                payload["event_id"] = events[-1]["id"]
+            else:
+                dummy_event = {
+                    "id": str(uuid.uuid4()),
+                    "session_id": payload["session_id"],
+                    "round_number": 0,
+                    "sender": "SELLER_GUARDRAIL",
+                    "quantity": 1,
+                    "proposed_price": 0.0,
+                    "guardrail_clamped_price": 0.0,
+                    "is_rule_passed": True,
+                    "passed_rules": [],
+                    "violated_rules": [],
+                    "rule_reason": "SYSTEM_LIFECYCLE",
+                    "public_justification": "Lifecycle audit entry",
+                }
+                self.client.table("offer_events").insert(dummy_event).execute()
+                payload["event_id"] = dummy_event["id"]
+
+        self.client.table("audit_logs").insert(payload).execute()
 
     def get_audit_logs(self, session_id: str) -> List[Dict[str, Any]]:
         res = self.client.table("audit_logs").select("*").eq("session_id", session_id).order("logged_at").execute()
