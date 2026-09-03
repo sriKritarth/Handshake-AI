@@ -10,3 +10,5 @@ instructor[groq]
 supabase
 razorpay
 slowapi
+structlog
+logging

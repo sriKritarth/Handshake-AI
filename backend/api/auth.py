@@ -5,8 +5,11 @@ import hashlib
 import secrets
 from typing import List
 
+import structlog
 from fastapi import HTTPException, Security
 from fastapi.security import APIKeyHeader
+
+log = structlog.get_logger()
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -46,6 +49,12 @@ class AuthenticatedClient:
     def require_scope(self, scope: str) -> None:
         """Raise HTTP 403 if the client does not hold *scope*."""
         if not self.has_scope(scope):
+            log.warning(
+                "scope_denied",
+                client_name=self.client_name,
+                required_scope=scope,
+                client_scopes=self.scopes,
+            )
             raise HTTPException(
                 status_code=403,
                 detail=f"Missing required scope: {scope}",
@@ -67,6 +76,7 @@ def make_auth_dependency(supabase_client):
         raw_key: str = Security(api_key_header),
     ) -> AuthenticatedClient:
         if not raw_key:
+            log.warning("auth_failed", reason="missing_key")
             raise HTTPException(status_code=401, detail="X-API-Key header missing")
         clean_key = raw_key.strip().strip("'\"")
         if clean_key.lower().startswith("bearer "):
@@ -82,6 +92,7 @@ def make_auth_dependency(supabase_client):
         )
 
         if not result or not result.data:
+            log.warning("auth_failed", reason="invalid_key", key_hash_prefix=hashed[:8])
             raise HTTPException(status_code=401, detail="Invalid or inactive API key")
 
         row = result.data[0]
@@ -94,6 +105,7 @@ def make_auth_dependency(supabase_client):
         except Exception:
             pass  # non-critical
 
+        log.info("auth_success", client_name=row["client_name"], scopes=row["scopes"])
         return AuthenticatedClient(
             client_name=row["client_name"],
             scopes=row["scopes"] or [],

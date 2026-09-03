@@ -8,7 +8,10 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 import httpx
+import structlog
 from supabase import create_client, Client, ClientOptions
+
+log = structlog.get_logger()
 
 
 class SessionRecord(BaseModel):
@@ -259,7 +262,9 @@ class SupabaseSessionRepository(BaseSessionRepository):
         }
         res = self.client.table("negotiation_sessions").insert(payload).execute()
         if res.data:
+            log.debug("db_write", table="negotiation_sessions", session_id=session.id, operation="create")
             return session
+        log.error("db_error", table="negotiation_sessions", operation="create", error="Insert returned no data")
         raise RuntimeError("Failed to create negotiation session in Supabase.")
 
     def get_session(self, session_id: str) -> Optional[SessionRecord]:
@@ -299,6 +304,7 @@ class SupabaseSessionRepository(BaseSessionRepository):
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         self.client.table("negotiation_sessions").update(payload).eq("id", session.id).execute()
+        log.debug("db_write", table="negotiation_sessions", session_id=session.id, operation="update")
         return session
 
     def record_offer_event(self, event: OfferEventRecord) -> OfferEventRecord:
@@ -317,6 +323,7 @@ class SupabaseSessionRepository(BaseSessionRepository):
             "public_justification": event.public_justification or "",
         }
         self.client.table("offer_events").insert(payload).execute()
+        log.debug("db_write", table="offer_events", session_id=event.session_id, operation="insert", sender=event.sender)
         return event
 
     def get_offer_events(self, session_id: str) -> List[Dict[str, Any]]:

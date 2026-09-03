@@ -2,8 +2,11 @@
 from __future__ import annotations
 
 import os
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
+
+import structlog
 
 from session.audit import AuditService
 from session.db import (
@@ -27,6 +30,8 @@ from session.prompts import (
     build_user_prompt,
     pick_prompt_template,
 )
+
+log = structlog.get_logger()
 
 
 class DefaultGroqDecisionClient:
@@ -224,10 +229,22 @@ class NegotiationSessionService:
         """Process a buyer proposal or acceptance through the FSM, Prompt Router, and LLM."""
         # 1. Load session and evaluate lazy expiry
         session = self.get_session(session_id)
+        log.info(
+            "session_loaded",
+            session_id=session_id,
+            status=session.status,
+            current_round=session.current_round,
+        )
         fsm = NegotiationFSM(session)
 
         # 2. Check terminal states
         if session.status in ("AGREED", "REJECTED", "EXPIRED"):
+            log.warning(
+                "terminal_state_rejected",
+                session_id=session_id,
+                status=session.status,
+                attempted_action="buyer_move",
+            )
             raise InvalidStateTransitionError(
                 f"Session {session_id} is in terminal state '{session.status}'. No further proposals allowed.",
                 current_state=session.status,
@@ -293,6 +310,13 @@ class NegotiationSessionService:
         assert session.current_round == expected_round, (
             f"Round mismatch: DB returned {session.current_round}, expected {expected_round}"
         )
+        log.info(
+            "round_incremented",
+            session_id=session_id,
+            previous_round=session.current_round - 1,
+            new_round=session.current_round,
+            max_rounds=max_rounds,
+        )
 
         # Advance state to IN_PROGRESS if INITIATED
         if session.status == "INITIATED":
@@ -317,11 +341,19 @@ class NegotiationSessionService:
             buyer_event_id = buyer_event.id
 
         # 7. Select prompt template and build prompts
+        is_final_round = session.current_round >= max_rounds
         template_name = pick_prompt_template(
             current_round=session.current_round,
             max_rounds=max_rounds,
             accept_last_offer=move.accept_last_offer,
             is_merchant_resumed=is_merchant_resumed,
+        )
+        log.info(
+            "prompt_selected",
+            session_id=session_id,
+            template=template_name,
+            round=session.current_round,
+            is_final=is_final_round,
         )
 
         sys_prompt = build_system_prompt(sku, policy)
@@ -342,13 +374,36 @@ class NegotiationSessionService:
         )
 
         # 8. Call LLM for NegotiationDecision
+        log.info(
+            "llm_call_start",
+            session_id=session_id,
+            model=getattr(self.llm_client, "model", "unknown"),
+            round=session.current_round,
+        )
+        _llm_start = time.monotonic()
         try:
             raw_decision = self.llm_client.get_seller_response(sys_prompt, user_prompt)
         except Exception as exc:
+            log.error(
+                "llm_call_failed",
+                session_id=session_id,
+                error=str(exc),
+                round=session.current_round,
+                rounds_remaining=max_rounds - session.current_round,
+            )
             # Round was intentionally consumed before call; raise descriptive error
             raise RuntimeError(
                 f"Round {session.current_round} was consumed but seller agent encountered an error: {exc}"
             ) from exc
+        _llm_duration_ms = int((time.monotonic() - _llm_start) * 1000)
+        log.info(
+            "llm_call_complete",
+            session_id=session_id,
+            raw_counter_price=raw_decision.counter_price,
+            should_accept=raw_decision.should_accept,
+            needs_approval=raw_decision.needs_approval,
+            duration_ms=_llm_duration_ms,
+        )
 
         # 9. Apply post-LLM guardrail clamp and logical conflict resolution
         decision = apply_post_llm_guardrails(raw_decision, floor_price, margin_floor)
@@ -372,40 +427,89 @@ class NegotiationSessionService:
 
         if decision.should_accept:
             # Re-validate against fresh stock and policy
-            self._revalidate_acceptance(
-                sku_id=session.sku_id,
-                quantity=move.quantity,
+            log.info(
+                "revalidation_start",
+                session_id=session_id,
                 agreed_price=decision.counter_price,
+                quantity=move.quantity,
             )
+            try:
+                self._revalidate_acceptance(
+                    sku_id=session.sku_id,
+                    quantity=move.quantity,
+                    agreed_price=decision.counter_price,
+                )
+                fresh_policy = self.repo.get_pricing_policy_by_sku_id(sku["id"])
+                fresh_sku = self.repo.get_catalog_sku_by_code(session.sku_id)
+                log.info(
+                    "revalidation_passed",
+                    session_id=session_id,
+                    fresh_floor=float(fresh_policy.get("floor_price", 0)) if fresh_policy else None,
+                    fresh_stock=int(fresh_sku.get("inventory_qty", 0)) if fresh_sku else None,
+                )
+            except ValueError as reval_err:
+                log.warning(
+                    "revalidation_failed",
+                    session_id=session_id,
+                    reason=str(reval_err),
+                    agreed_price=decision.counter_price,
+                )
+                raise
 
             # Transition to AGREED
+            old_status = session.status
             if session.status == "FINAL_OFFER":
                 fsm.accept_final_offer()
             else:
                 fsm.buyer_accepts()
+            log.info(
+                "state_transition",
+                session_id=session_id,
+                from_state=old_status,
+                to_state=session.status,
+                trigger="should_accept",
+            )
 
             session.final_agreed_price = decision.counter_price
-            
+
             # Fire Payment Link creation side-effect
-            payment_res = self.payment_service.create_payment_link(
-                session_id=session.id,
-                sku_code=sku.get("sku_code", sku["id"]),
-                quantity=move.quantity,
-                unit_price=decision.counter_price,
-                buyer_id=session.buyer_id,
-            )
-            self.repo.record_razorpay_order(
-                session_id=session.id,
-                razorpay_order_id=payment_res.razorpay_order_id,
-                payment_link_id=payment_res.razorpay_payment_link_id,
-                short_url=payment_res.payment_link_url,
-                amount=payment_res.amount,
-            )
+            try:
+                payment_res = self.payment_service.create_payment_link(
+                    session_id=session.id,
+                    sku_code=sku.get("sku_code", sku["id"]),
+                    quantity=move.quantity,
+                    unit_price=decision.counter_price,
+                    buyer_id=session.buyer_id,
+                )
+                self.repo.record_razorpay_order(
+                    session_id=session.id,
+                    razorpay_order_id=payment_res.razorpay_order_id,
+                    payment_link_id=payment_res.razorpay_payment_link_id,
+                    short_url=payment_res.payment_link_url,
+                    amount=payment_res.amount,
+                )
+                log.info(
+                    "razorpay_link_created",
+                    session_id=session.id,
+                    amount_paise=payment_res.amount,
+                    short_url=payment_res.payment_link_url,
+                )
+            except Exception as pay_err:
+                log.error("razorpay_link_failed", session_id=session.id, error=str(pay_err))
+                raise
             status_msg = f"Deal agreed at ₹{decision.counter_price:.2f}/unit. Payment link created."
 
         elif decision.needs_approval:
             # Transition to PENDING_APPROVAL with 30-minute expiry window (Decision 3)
+            old_status = session.status
             fsm.guardrail_escalates()
+            log.info(
+                "state_transition",
+                session_id=session_id,
+                from_state=old_status,
+                to_state=session.status,
+                trigger="needs_approval",
+            )
             session.pending_approval_price = decision.counter_price
             session.expires_at = datetime.now(timezone.utc) + timedelta(minutes=30)
             self.repo.record_merchant_approval(
@@ -418,14 +522,30 @@ class NegotiationSessionService:
 
         elif session.current_round >= max_rounds:
             # Transition to FINAL_OFFER take-it-or-leave-it
+            old_status = session.status
             fsm.reach_round_limit()
+            log.info(
+                "state_transition",
+                session_id=session_id,
+                from_state=old_status,
+                to_state=session.status,
+                trigger="round_limit_reached",
+            )
             session.final_offer_price = decision.counter_price
             session.expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
             status_msg = f"Round limit reached ({max_rounds}/{max_rounds}). Best and final offer expires in 15 minutes."
 
         else:
             # Stays IN_PROGRESS
+            old_status = session.status
             fsm.counter_offer()
+            log.info(
+                "state_transition",
+                session_id=session_id,
+                from_state=old_status,
+                to_state=session.status,
+                trigger="counter_offer",
+            )
             status_msg = f"Counter-offer proposed. {max_rounds - session.current_round} rounds remaining."
 
         # 12. Persist session updates and append audit log
@@ -471,7 +591,17 @@ class NegotiationSessionService:
     ) -> SessionResponse:
         """Process merchant response for deals flagged PENDING_APPROVAL."""
         session = self.get_session(session_id)
+        log.info(
+            "merchant_decision_processing",
+            action=decision.decision,
+            session_id=session_id,
+        )
         if session.status != "PENDING_APPROVAL":
+            log.warning(
+                "merchant_approval_timeout",
+                session_id=session_id,
+                expired_at=session.expires_at.isoformat() if session.expires_at else None,
+            )
             raise InvalidStateTransitionError(
                 f"Session {session_id} is in status '{session.status}', not PENDING_APPROVAL.",
                 current_state=session.status,
@@ -510,6 +640,12 @@ class NegotiationSessionService:
                 short_url=payment_res.payment_link_url,
                 amount=payment_res.amount,
             )
+            log.info(
+                "razorpay_link_created",
+                session_id=session.id,
+                amount_paise=payment_res.amount,
+                short_url=payment_res.payment_link_url,
+            )
             status_msg = f"Merchant approved deal at ₹{agreed_p:.2f}. Payment link created."
 
         elif decision.decision.lower() == "reject":
@@ -535,6 +671,12 @@ class NegotiationSessionService:
             )
             self.repo.record_offer_event(counter_event)
             event_id = counter_event.id
+            log.info(
+                "merchant_counter_applied",
+                session_id=session_id,
+                counter_price=decision.counter_price,
+                merchant_notes=decision.merchant_notes,
+            )
             status_msg = f"Merchant proposed adjusted counter-price ₹{decision.counter_price:.2f}."
 
         else:

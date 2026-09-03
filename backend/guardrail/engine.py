@@ -30,6 +30,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import structlog
 from guardrail.base import Offer, PricingRule, RuleResult
 from guardrail.rules.floor_price_rule import FloorPriceRule
 from guardrail.rules.inventory_discretion_rule import InventoryDiscretionRule
@@ -38,6 +39,8 @@ from guardrail.rules.max_discount_rule import MaxDiscountRule
 from guardrail.rules.quantity_tier_rule import QuantityTierRule
 from guardrail.rules.round_limit_rule import RoundLimitRule
 from models.pricing_policy import PricingPolicy
+
+log = structlog.get_logger()
 
 
 # ---------------------------------------------------------------------------
@@ -164,6 +167,29 @@ class GuardrailEngine:
 
             result = rule.evaluate(waterfall_offer, policy)
             rule_results.append(result)
+
+            # Log every rule outcome
+            if result.passed:
+                log.info(
+                    "guardrail_rule_passed",
+                    rule=result.rule_name,
+                    proposed_price=current_price,
+                    adjusted_price=result.adjusted_price,
+                )
+            else:
+                log.warning(
+                    "guardrail_rule_violated",
+                    rule=result.rule_name,
+                    proposed_price=current_price,
+                    adjusted_price=result.adjusted_price,
+                    action="clamped",
+                )
+            if result.requires_merchant_approval:
+                log.info(
+                    "guardrail_needs_approval",
+                    rule=result.rule_name,
+                    proposed_price=current_price,
+                )
 
             # Advance price through the waterfall.
             # Inline the adjusted-vs-original logic here; no property needed on RuleResult.

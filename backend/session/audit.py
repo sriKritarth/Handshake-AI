@@ -7,6 +7,10 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
+import structlog
+
+log = structlog.get_logger()
+
 
 class AuditService:
     """Service to compute cryptographic hash chains and record audit log entries."""
@@ -48,6 +52,14 @@ class AuditService:
             event_id=event_id,
             snapshot_data=payload,
             logged_at=logged_at,
+        )
+
+        log.info(
+            "audit_entry_created",
+            session_id=session_id,
+            event_type=event_type,
+            current_hash=current_hash[:16],
+            previous_hash=(previous_hash or "GENESIS")[:16],
         )
 
         return {

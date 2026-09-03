@@ -7,10 +7,12 @@ OpenAPI docs: http://localhost:8000/docs
 """
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from pathlib import Path
 
+import structlog
 from dotenv import load_dotenv
 
 _backend_dir = Path(__file__).resolve().parent
@@ -20,6 +22,22 @@ load_dotenv(_root_dir / ".env", override=True)
 
 if str(_backend_dir) not in sys.path:
     sys.path.insert(0, str(_backend_dir))
+
+# ---------------------------------------------------------------------------
+# Structured logging — configure ONCE before anything else imports a logger
+# ---------------------------------------------------------------------------
+
+structlog.configure(
+    processors=[
+        structlog.contextvars.merge_contextvars,
+        structlog.processors.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.JSONRenderer(),
+    ],
+    wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
+)
 
 import httpx
 from fastapi import FastAPI, Request

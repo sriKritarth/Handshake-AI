@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from slowapi import Limiter
@@ -20,6 +21,8 @@ from api.schemas import (
 
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(prefix="/api/v1", tags=["negotiation"], dependencies=[Depends(api_key_header)])
+
+log = structlog.get_logger()
 
 
 # ---------------------------------------------------------------------------
@@ -125,6 +128,13 @@ async def create_session(
     client: AuthenticatedClient = request.state.auth_client
     client.require_scope("admin:create_session")
 
+    log.info(
+        "session_create_request",
+        buyer_id=req.buyer_id,
+        sku_code=req.sku_code,
+        quantity=req.quantity,
+        channel=req.channel,
+    )
     service = request.state.service
     try:
         record = service.create_session(
@@ -136,6 +146,7 @@ async def create_session(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
+    log.info("session_created", session_id=record.id, status=record.status)
     return _session_record_to_response(record, sku_code=req.sku_code)
 
 
@@ -175,6 +186,12 @@ async def buyer_move(
     client: AuthenticatedClient = request.state.auth_client
     client.require_scope("buyer:negotiate")
 
+    log.info(
+        "buyer_move_request",
+        session_id=session_id,
+        offered_price=req.offered_price,
+        quantity=req.quantity,
+    )
     service = request.state.service
     from session.models import BuyerMove
 
@@ -191,6 +208,12 @@ async def buyer_move(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
+    log.info(
+        "buyer_move_response",
+        session_id=session_id,
+        status=result.status,
+        counter_price=result.seller_proposed_price,
+    )
     return _domain_session_response_to_api(result)
 
 
@@ -203,6 +226,7 @@ async def accept_offer(
     client: AuthenticatedClient = request.state.auth_client
     client.require_scope("buyer:accept")
 
+    log.info("buyer_accept_request", session_id=session_id)
     service = request.state.service
     from session.models import BuyerMove
 
@@ -220,6 +244,12 @@ async def accept_offer(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
+    log.info(
+        "buyer_accept_response",
+        session_id=session_id,
+        status=result.status,
+        final_price=result.final_agreed_price,
+    )
     return _domain_session_response_to_api(result)
 
 
@@ -232,6 +262,7 @@ async def decline_offer(
     client: AuthenticatedClient = request.state.auth_client
     client.require_scope("buyer:decline")
 
+    log.info("buyer_decline_request", session_id=session_id)
     service = request.state.service
     try:
         from session.fsm import InvalidStateTransitionError, NegotiationFSM
@@ -251,6 +282,7 @@ async def decline_offer(
     except Exception as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
+    log.info("buyer_declined", session_id=session_id, status="REJECTED")
     return NegotiationResponse(
         session_id=session_id,
         status="REJECTED",
@@ -274,6 +306,12 @@ async def merchant_decision(
     # Check scope after body is parsed (req.action is available here)
     client.require_scope(f"merchant:{req.action}")
 
+    log.info(
+        "merchant_decision_request",
+        session_id=session_id,
+        action=req.action,
+        counter_price=req.counter_price,
+    )
     service = request.state.service
 
     # Map HTTP schema → domain model
@@ -291,6 +329,7 @@ async def merchant_decision(
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
+    log.info("merchant_decision_response", session_id=session_id, status=result.status)
     return _domain_session_response_to_api(result)
 
 
@@ -348,6 +387,8 @@ async def replay_session(
     client: AuthenticatedClient = request.state.auth_client
     client.require_scope("audit:read")
 
+    log.info("replay_requested", session_id=session_id)
+
     service = request.state.service
     logs = service.repo.get_audit_logs(session_id)
 
@@ -391,6 +432,8 @@ async def verify_session(
     """
     client: AuthenticatedClient = request.state.auth_client
     client.require_scope("audit:read")
+
+    log.info("verify_requested", session_id=session_id)
 
     service = request.state.service
     from session.audit import AuditService

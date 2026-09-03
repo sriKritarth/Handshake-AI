@@ -2,16 +2,16 @@
 from __future__ import annotations
 
 import json
-import logging
 import re
 from typing import Any, Dict, List, Optional, Union
 
+import structlog
 from guardrail.base import Offer
 from models.catalog import CatalogItem
 from models.intent import BuyerIntent, HistoricalRound, ProposedOffer, ProposedOfferLLMOutput
 from strategy.client import LLMClient, LLMClientError
 
-logger = logging.getLogger(__name__)
+log = structlog.get_logger()
 
 
 class StrategyEngineError(Exception):
@@ -93,11 +93,11 @@ class StrategyEngine:
             )
         except Exception as exc:
             primary_error = exc
-            logger.warning("Primary LLM client failed: %s", exc)
+            log.warning("primary_llm_failed", error=str(exc))
 
         # 2. If Primary failed and fallback is available, trigger explicit fallback branch
         if self.fallback_client is not None:
-            logger.info("Triggering fallback LLM client...")
+            log.info("triggering_fallback_llm")
             try:
                 return self._execute_with_client(
                     client=self.fallback_client,
@@ -108,7 +108,11 @@ class StrategyEngine:
                     client_name="Fallback",
                 )
             except Exception as fallback_exc:
-                logger.error("Fallback LLM client also failed: %s", fallback_exc)
+                log.error(
+                    "fallback_llm_failed",
+                    primary_error=str(primary_error),
+                    fallback_error=str(fallback_exc),
+                )
                 raise StrategyEngineError(
                     f"All LLM clients failed. Primary error: {primary_error}; Fallback error: {fallback_exc}"
                 ) from fallback_exc
@@ -159,16 +163,23 @@ class StrategyEngine:
             except LLMClientError as client_err:
                 # If rate-limited (429), don't waste retries on this client — fail fast to fallback
                 if client_err.is_rate_limit:
-                    logger.warning("%s client hit rate limit (429). Failing fast to next tier.", client_name)
+                    log.warning(
+                        "llm_rate_limited",
+                        client=client_name,
+                        error=str(client_err),
+                    )
                     raise
                 last_parse_error = f"API Client error: {client_err}"
                 if attempt == self.max_attempts_per_client:
                     raise
             except (ValueError, Exception) as parse_err:
                 last_parse_error = str(parse_err)
-                logger.warning(
-                    "%s client attempt %d/%d failed to produce valid response: %s",
-                    client_name, attempt, self.max_attempts_per_client, parse_err
+                log.warning(
+                    "llm_attempt_failed",
+                    client=client_name,
+                    attempt=attempt,
+                    max_attempts=self.max_attempts_per_client,
+                    error=str(parse_err),
                 )
                 if attempt == self.max_attempts_per_client:
                     raise StrategyEngineError(
