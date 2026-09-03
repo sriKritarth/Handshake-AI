@@ -1,5 +1,12 @@
 .env
 .venv
 __pycache__
-/demo/
+/test_benchmark_suite.md
+/reports
+/tests/test_benchmark.py
+/tests/conftest.py
+
+
+
+
 

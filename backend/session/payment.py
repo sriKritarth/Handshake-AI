@@ -5,7 +5,8 @@ import os
 import uuid
 import razorpay
 from typing import Any, Dict, Optional
-
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=".env")
 
 class PaymentLinkResult:
     def __init__(
