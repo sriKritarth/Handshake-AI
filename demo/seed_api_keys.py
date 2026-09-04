@@ -53,6 +53,7 @@ DEMO_CLIENTS = [
         "scopes": [
             "admin:create_session", "session:read", "audit:read",
             "buyer:negotiate", "buyer:accept", "buyer:decline",
+            "merchant:approve", "merchant:reject", "merchant:counter",
         ],
     },
 ]
