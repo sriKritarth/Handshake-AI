@@ -123,4 +123,7 @@ class SessionResponse(BaseModel):
     payment_link_url: Optional[str] = None
     checkout_url: Optional[str] = None
     razorpay_order_id: Optional[str] = None
+    amount: Optional[float] = None
+    amount_paise: Optional[int] = None
+    currency: Optional[str] = "INR"
     status_message: str

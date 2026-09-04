@@ -104,6 +104,12 @@ class BaseSessionRepository(ABC):
         pass
 
     @abstractmethod
+    def update_razorpay_order_status(
+        self, session_id: str, status: str, payment_id: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        pass
+
+    @abstractmethod
     def append_audit_log(self, log_entry: Dict[str, Any]) -> None:
         pass
 
@@ -203,6 +209,17 @@ class InMemorySessionRepository(BaseSessionRepository):
 
     def get_razorpay_order(self, session_id: str) -> Optional[Dict[str, Any]]:
         return self.razorpay_orders.get(session_id)
+
+    def update_razorpay_order_status(
+        self, session_id: str, status: str, payment_id: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        order = self.razorpay_orders.get(session_id)
+        if order:
+            order["status"] = status
+            if payment_id:
+                order["payment_id"] = payment_id
+            order["updated_at"] = datetime.now(timezone.utc).isoformat()
+        return order
 
     def append_audit_log(self, log_entry: Dict[str, Any]) -> None:
         self.audit_logs.setdefault(log_entry["session_id"], []).append(log_entry)
@@ -384,6 +401,18 @@ class SupabaseSessionRepository(BaseSessionRepository):
                 .limit(1)
                 .execute()
             )
+            return res.data[0] if res.data else None
+        except Exception:
+            return None
+
+    def update_razorpay_order_status(
+        self, session_id: str, status: str, payment_id: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        payload = {"status": status}
+        if payment_id:
+            payload["payment_id"] = payment_id
+        try:
+            res = self.client.table("razorpay_orders").update(payload).eq("session_id", session_id).execute()
             return res.data[0] if res.data else None
         except Exception:
             return None

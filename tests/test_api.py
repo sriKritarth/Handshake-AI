@@ -65,9 +65,17 @@ SAMPLE_POLICY: Dict[str, Any] = {
 
 
 class MockLLM:
-    """Always returns a counter-offer at ₹300."""
+    """Returns a counter-offer at ₹300, or accepts when buyer accepts."""
 
     def get_seller_response(self, system_prompt: str, user_prompt: str) -> NegotiationDecision:
+        if "BUYER_ACCEPTS" in user_prompt or "accepted" in user_prompt.lower():
+            return NegotiationDecision(
+                counter_price=300.0,
+                justification="Deal agreed at ₹300.",
+                internal_reasoning="Buyer accepted seller offer.",
+                should_accept=True,
+                needs_approval=False,
+            )
         return NegotiationDecision(
             counter_price=300.0,
             justification="Competitive pricing for bulk orders.",
@@ -91,6 +99,17 @@ def _make_test_app(scopes: List[str], client_name: str = "test-client") -> FastA
 
     @test_app.middleware("http")
     async def inject_state(request: Request, call_next):
+        if (
+            request.url.path.startswith("/api/v1/checkout/")
+            or request.url.path == "/api/v1/orders"
+            or request.url.path == "/api/v1/payments/verify"
+            or (request.url.path.startswith("/api/v1/sessions/") and request.url.path.endswith("/order"))
+            or request.url.path == "/api/v1/health"
+        ):
+            request.state.auth_client = auth_client
+            request.state.service = service
+            return await call_next(request)
+
         raw_key = request.headers.get("X-API-Key")
         if not raw_key:
             return JSONResponse(status_code=401, content={"detail": "X-API-Key header missing"})
@@ -239,3 +258,116 @@ def test_create_session_and_buyer_move() -> None:
     audit_body = audit_resp.json()
     assert audit_body["chain_valid"] is True
     assert len(audit_body["entries"]) >= 2  # SESSION_CREATED + at least one move
+
+
+def test_buyer_move_on_agreed_session_returns_200_with_checkout_url() -> None:
+    """Submitting moves or accepting on an already AGREED session returns 200 with checkout_url, never 500."""
+    app = _make_test_app(scopes=[
+        "admin:create_session", "session:read", "buyer:negotiate",
+        "buyer:accept", "buyer:decline", "audit:read",
+    ])
+    client = TestClient(app, raise_server_exceptions=False)
+
+    # 1. Create session
+    create_resp = client.post("/api/v1/sessions", json={
+        "buyer_id": "ai-buyer-agreed",
+        "sku_code": "TSH-PREM-001",
+        "quantity": 100,
+        "channel": "API",
+    }, headers={"X-API-Key": "any-key"})
+    assert create_resp.status_code == 201
+    session_id = create_resp.json()["session_id"]
+
+    # 2. Negotiate to enter IN_PROGRESS
+    move1 = client.post(f"/api/v1/sessions/{session_id}/moves", json={
+        "quantity": 100,
+        "offered_price": 300.0,
+        "buyer_message": "Can you do 300?",
+        "accept_last_offer": False,
+    }, headers={"X-API-Key": "any-key"})
+    assert move1.status_code == 200
+
+    # 3. Accept seller offer to transition to AGREED
+    accept_resp = client.post(f"/api/v1/sessions/{session_id}/accept", headers={"X-API-Key": "any-key"})
+    assert accept_resp.status_code == 200
+    accept_data = accept_resp.json()
+    assert accept_data["status"] == "AGREED"
+    assert accept_data["checkout_url"] == f"/api/v1/checkout/{session_id}"
+
+    # 3. Subsequent buyer move on AGREED session must return 200 (NOT 500) with checkout_url
+    subsequent_move_resp = client.post(f"/api/v1/sessions/{session_id}/moves", json={
+        "quantity": 100,
+        "offered_price": 280.0,
+        "buyer_message": "Can I get even more discount?",
+        "accept_last_offer": False,
+    }, headers={"X-API-Key": "any-key"})
+    assert subsequent_move_resp.status_code == 200
+    sub_data = subsequent_move_resp.json()
+    assert sub_data["status"] == "AGREED"
+    assert sub_data["checkout_url"] == f"/api/v1/checkout/{session_id}"
+    assert sub_data["final_agreed_price"] is not None
+
+    # 4. Subsequent accept call on AGREED session must also return 200 with checkout_url
+    second_accept_resp = client.post(f"/api/v1/sessions/{session_id}/accept", headers={"X-API-Key": "any-key"})
+    assert second_accept_resp.status_code == 200
+    second_accept_data = second_accept_resp.json()
+    assert second_accept_data["status"] == "AGREED"
+    assert second_accept_data["checkout_url"] == f"/api/v1/checkout/{session_id}"
+
+
+def test_razorpay_order_creation_and_checkout_flow() -> None:
+    """Full test of minimal frontend checkout and Razorpay fetch API integration."""
+    app = _make_test_app(scopes=[
+        "admin:create_session", "session:read", "buyer:negotiate",
+        "buyer:accept", "audit:read",
+    ])
+    client = TestClient(app, raise_server_exceptions=False)
+
+    # 1. Create session with quantity=100
+    create_resp = client.post("/api/v1/sessions", json={
+        "buyer_id": "buyer-rzp-01",
+        "sku_code": "TSH-PREM-001",
+        "quantity": 100,
+        "channel": "API",
+    }, headers={"X-API-Key": "any-key"})
+    assert create_resp.status_code == 201
+    session_id = create_resp.json()["session_id"]
+
+    # 2. Negotiate and accept offer
+    client.post(f"/api/v1/sessions/{session_id}/moves", json={
+        "quantity": 100,
+        "offered_price": 300.0,
+        "accept_last_offer": False,
+    }, headers={"X-API-Key": "any-key"})
+
+    accept_resp = client.post(f"/api/v1/sessions/{session_id}/accept", headers={"X-API-Key": "any-key"})
+    assert accept_resp.status_code == 200
+    accept_data = accept_resp.json()
+    assert accept_data["status"] == "AGREED"
+    assert accept_data["amount"] == 30000.0
+    assert accept_data["amount_paise"] == 3000000
+    assert accept_data["currency"] == "INR"
+    assert accept_data["checkout_url"] == f"/api/v1/checkout/{session_id}"
+
+    # 3. GET /api/v1/checkout/{session_id} renders HTML page
+    html_resp = client.get(f"/api/v1/checkout/{session_id}")
+    assert html_resp.status_code == 200
+    assert "text/html" in html_resp.headers["content-type"]
+    assert "TSH-PREM-001" in html_resp.text
+    assert "30,000.00" in html_resp.text
+    assert "Pay ₹30,000.00 with Razorpay" in html_resp.text
+    assert "checkout.razorpay.com" in html_resp.text
+
+    # 4. GET /api/v1/checkout/{session_id} on non-AGREED session returns 400
+    create_init = client.post("/api/v1/sessions", json={
+        "buyer_id": "buyer-init-01",
+        "sku_code": "TSH-PREM-001",
+        "quantity": 10,
+        "channel": "API",
+    }, headers={"X-API-Key": "any-key"})
+    init_id = create_init.json()["session_id"]
+    non_agreed_resp = client.get(f"/api/v1/checkout/{init_id}")
+    assert non_agreed_resp.status_code == 400
+    assert "AGREED" in non_agreed_resp.json()["detail"]
+
+

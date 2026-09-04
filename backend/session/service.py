@@ -24,7 +24,6 @@ from session.models import (
     NegotiationDecision,
     SessionResponse,
 )
-from session.payment import RazorpayPaymentService
 from session.prompts import (
     build_system_prompt,
     build_user_prompt,
@@ -72,7 +71,7 @@ class NegotiationSessionService:
         self,
         repo: Optional[BaseSessionRepository] = None,
         llm_client: Optional[Any] = None,
-        payment_service: Optional[RazorpayPaymentService] = None,
+        payment_service: Optional[Any] = None,
     ) -> None:
         if repo is not None:
             self.repo = repo
@@ -83,7 +82,7 @@ class NegotiationSessionService:
                 self.repo = InMemorySessionRepository()
 
         self.llm_client = llm_client or DefaultGroqDecisionClient()
-        self.payment_service = payment_service or RazorpayPaymentService()
+        self.payment_service = payment_service
 
     def _append_audit(
         self,
@@ -225,7 +224,7 @@ class NegotiationSessionService:
 
         return session
 
-    def handle_buyer_move(self, session_id: str, move: BuyerMove) -> SessionResponse:
+    def handle_buyer_move(self, session_id: str, move: BuyerMove) :
         """Process a buyer proposal or acceptance through the FSM, Prompt Router, and LLM."""
         # 1. Load session and evaluate lazy expiry
         session = self.get_session(session_id)
@@ -238,7 +237,44 @@ class NegotiationSessionService:
         fsm = NegotiationFSM(session)
 
         # 2. Check terminal states
-        if session.status in ("AGREED", "REJECTED", "EXPIRED"):
+        if session.status == "AGREED":
+            log.info(
+                "session_already_agreed",
+                session_id=session_id,
+                final_agreed_price=session.final_agreed_price,
+            )
+            final_price = session.final_agreed_price or 0.0
+            sku = self.repo.get_catalog_sku_by_code(session.sku_id)
+            sku_code = sku.get("sku_code", sku["id"]) if sku else session.sku_id
+            policy = self.repo.get_pricing_policy_by_sku_id(sku["id"]) if sku else None
+            max_rounds = int(policy.get("max_rounds", 5)) if policy else 5
+            total_amount = float(final_price * session.quantity)
+            amount_paise = int(round(total_amount * 100))
+            checkout_url = f"/api/v1/checkout/{session.id}"
+
+            return SessionResponse(
+                session_id=session.id,
+                sku_code=sku_code,
+                status="AGREED",
+                current_round=session.current_round,
+                max_rounds=max_rounds,
+                seller_proposed_price=final_price,
+                counter_quantity=session.quantity,
+                quantity=session.quantity,
+                draft_justification="Deal has already been agreed. Proceed to checkout to complete payment.",
+                internal_reasoning="Session already finalized in AGREED state.",
+                final_offer_price=session.final_offer_price,
+                final_agreed_price=final_price,
+                pending_approval_price=session.pending_approval_price,
+                expires_at=session.expires_at,
+                amount=total_amount,
+                amount_paise=amount_paise,
+                currency="INR",
+                checkout_url=checkout_url,
+                status_message=f"Deal agreed at ₹{final_price:.2f}/unit. Proceed to checkout.",
+            )
+
+        if session.status in ("REJECTED", "EXPIRED"):
             log.warning(
                 "terminal_state_rejected",
                 session_id=session_id,
@@ -334,6 +370,9 @@ class NegotiationSessionService:
         # Advance state to IN_PROGRESS if INITIATED
         if session.status == "INITIATED":
             fsm.start_negotiation()
+
+        if move.quantity:
+            session.quantity = move.quantity
 
         self.repo.update_session(session)
 
@@ -543,32 +582,10 @@ class NegotiationSessionService:
 
             session.final_agreed_price = decision.counter_price
 
-            # Fire Payment Link creation side-effect
-            try:
-                payment_res = self.payment_service.create_payment_link(
-                    session_id=session.id,
-                    sku_code=sku.get("sku_code", sku["id"]),
-                    quantity=session.quantity,
-                    unit_price=decision.counter_price,
-                    buyer_id=session.buyer_id,
-                )
-                self.repo.record_razorpay_order(
-                    session_id=session.id,
-                    razorpay_order_id=payment_res.razorpay_order_id,
-                    payment_link_id=payment_res.razorpay_payment_link_id,
-                    short_url=payment_res.payment_link_url,
-                    amount=payment_res.amount,
-                )
-                log.info(
-                    "razorpay_link_created",
-                    session_id=session_id,
-                    amount_paise=payment_res.amount,
-                    short_url=payment_res.payment_link_url,
-                )
-            except Exception as pay_err:
-                log.error("razorpay_link_failed", session_id=session.id, error=str(pay_err))
-                raise
-            status_msg = f"Deal agreed at ₹{decision.counter_price:.2f}/unit. Payment link created."
+            # Calculate amounts directly for checkout without blocking external calls
+            total_amount = float(decision.counter_price * session.quantity)
+            amount_paise = int(round(total_amount * 100))
+            status_msg = f"Deal agreed at ₹{decision.counter_price:.2f}/unit."
 
         elif decision.needs_approval:
             # Transition to PENDING_APPROVAL with 30-minute expiry window (Decision 3)
@@ -656,9 +673,10 @@ class NegotiationSessionService:
             final_agreed_price=session.final_agreed_price,
             pending_approval_price=session.pending_approval_price,
             expires_at=session.expires_at,
-            payment_link_url=payment_res.payment_link_url if payment_res else None,
-            checkout_url=payment_res.checkout_url if payment_res else None,
-            razorpay_order_id=payment_res.razorpay_order_id if payment_res else None,
+            amount=float(session.final_agreed_price * session.quantity) if (session.status == "AGREED" and session.final_agreed_price) else None,
+            amount_paise=int(round(session.final_agreed_price * session.quantity * 100)) if (session.status == "AGREED" and session.final_agreed_price) else None,
+            currency="INR" if session.status == "AGREED" else None,
+            checkout_url=f"/api/v1/checkout/{session.id}" if session.status == "AGREED" else None,
             status_message=status_msg,
         )
 
@@ -689,7 +707,6 @@ class NegotiationSessionService:
         fsm = NegotiationFSM(session)
         sku = self.repo.get_catalog_sku_by_code(session.sku_id)
         prior_state = session.status
-        payment_res = None
         event_id = None
 
         if decision.decision.lower() == "approve":
@@ -703,28 +720,7 @@ class NegotiationSessionService:
             session.final_agreed_price = agreed_p
             self.repo.update_merchant_approval(session_id, status="APPROVED", notes=decision.merchant_notes)
             
-            # Fire Payment Link creation
-            payment_res = self.payment_service.create_payment_link(
-                session_id=session.id,
-                sku_code=sku.get("sku_code", sku["id"]),
-                quantity=session.quantity,
-                unit_price=agreed_p,
-                buyer_id=session.buyer_id,
-            )
-            self.repo.record_razorpay_order(
-                session_id=session.id,
-                razorpay_order_id=payment_res.razorpay_order_id,
-                payment_link_id=payment_res.razorpay_payment_link_id,
-                short_url=payment_res.payment_link_url,
-                amount=payment_res.amount,
-            )
-            log.info(
-                "razorpay_link_created",
-                session_id=session.id,
-                amount_paise=payment_res.amount,
-                short_url=payment_res.payment_link_url,
-            )
-            status_msg = f"Merchant approved deal at ₹{agreed_p:.2f}. Payment link created."
+            status_msg = f"Merchant approved deal at ₹{agreed_p:.2f}."
 
         elif decision.decision.lower() == "reject":
             fsm.merchant_declines()
@@ -783,15 +779,21 @@ class NegotiationSessionService:
             max_rounds=5,
             quantity=session.quantity,
             final_agreed_price=session.final_agreed_price,
-            payment_link_url=payment_res.payment_link_url if payment_res else None,
-            checkout_url=payment_res.checkout_url if payment_res else None,
-            razorpay_order_id=payment_res.razorpay_order_id if payment_res else None,
+            amount=float(session.final_agreed_price * session.quantity) if (session.status == "AGREED" and session.final_agreed_price) else None,
+            amount_paise=int(round(session.final_agreed_price * session.quantity * 100)) if (session.status == "AGREED" and session.final_agreed_price) else None,
+            currency="INR" if session.status == "AGREED" else None,
+            checkout_url=f"/api/v1/checkout/{session.id}" if session.status == "AGREED" else None,
             status_message=status_msg,
         )
 
     def accept_offer(self, session_id: str, buyer_id: str) -> SessionResponse:
         """Buyer accepts active offer during NEGOTIATING or FINAL_OFFER."""
         session = self.get_session(session_id)
+        if session.status == "AGREED":
+            return self.handle_buyer_move(
+                session_id,
+                BuyerMove(quantity=session.quantity, offered_price=session.final_agreed_price, accept_last_offer=True),
+            )
         if session.status not in ("IN_PROGRESS", "FINAL_OFFER"):
             raise InvalidStateTransitionError(
                 f"Session is in state '{session.status}', cannot accept offer.",

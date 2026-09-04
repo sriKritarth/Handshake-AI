@@ -23,7 +23,6 @@ from session.db import (
     SessionRecord,
     SupabaseSessionRepository,
 )
-from session.payment import RazorpayPaymentService
 from session.audit import AuditService
 
 __all__ = [
@@ -47,6 +46,5 @@ __all__ = [
     "OfferEventRecord",
     "SessionRecord",
     "SupabaseSessionRepository",
-    "RazorpayPaymentService",
     "AuditService",
 ]

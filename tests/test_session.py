@@ -267,7 +267,9 @@ def test_scenario_1_buyer_offers_above_margin_floor_accepted_immediately(
 
     assert result.status == "AGREED"
     assert result.final_agreed_price == 450.0
-    assert result.payment_link_url is not None
+    assert result.amount == 450.0 * 500
+    assert result.amount_paise == int(450.0 * 500 * 100)
+    assert result.checkout_url is not None
     assert mock_llm.call_count == 1
 
 
@@ -367,7 +369,9 @@ def test_scenario_4_buyer_gradually_increases_hits_margin_floor_in_r3(
     r3 = service.handle_buyer_move(session.id, BuyerMove(quantity=500, offered_price=435.0))
     assert r3.status == "AGREED"
     assert r3.final_agreed_price == 435.0
-    assert r3.payment_link_url is not None
+    assert r3.amount == 435.0 * 500
+    assert r3.amount_paise == int(435.0 * 500 * 100)
+    assert r3.checkout_url is not None
 
 
 def test_scenario_5_buyer_offer_between_floor_and_margin_escalates_to_merchant(
@@ -405,7 +409,9 @@ def test_scenario_5_buyer_offer_between_floor_and_margin_escalates_to_merchant(
     )
     assert merchant_res.status == "AGREED"
     assert merchant_res.final_agreed_price == 405.0
-    assert merchant_res.payment_link_url is not None
+    assert merchant_res.amount == 405.0 * 500
+    assert merchant_res.amount_paise == int(405.0 * 500 * 100)
+    assert merchant_res.checkout_url is not None
 
 
 def test_scenario_6_buyer_accepts_last_seller_offer(
@@ -432,14 +438,16 @@ def test_scenario_6_buyer_accepts_last_seller_offer(
     res = service.handle_buyer_move(session.id, BuyerMove(quantity=500, accept_last_offer=True))
     assert res.status == "AGREED"
     assert res.final_agreed_price == 460.0
-    assert res.payment_link_url is not None
+    assert res.amount == 460.0 * 500
+    assert res.amount_paise == int(460.0 * 500 * 100)
+    assert res.checkout_url is not None
 
 
-def test_scenario_7_buyer_sends_move_after_session_agreed_returns_error(
+def test_scenario_7_buyer_sends_move_after_session_agreed_returns_agreed_response(
     sample_catalog_sku: Dict[str, Any],
     sample_pricing_policy: Dict[str, Any],
 ) -> None:
-    """Scenario 7: Buyer sends move after session is AGREED -> returns error, no LLM call."""
+    """Scenario 7: Buyer sends move after session is AGREED -> returns agreed response with checkout_url, no LLM call."""
     repo = InMemorySessionRepository()
     repo.save_catalog_sku(sample_catalog_sku)
     repo.save_pricing_policy(sample_pricing_policy)
@@ -452,14 +460,43 @@ def test_scenario_7_buyer_sends_move_after_session_agreed_returns_error(
     session = service.create_session(buyer_id="buyer_07", sku_code="SKU-1042")
 
     # Agreement reached in Round 1
-    service.handle_buyer_move(session.id, BuyerMove(quantity=500, offered_price=450.0))
+    r1 = service.handle_buyer_move(session.id, BuyerMove(quantity=500, offered_price=450.0))
+    assert r1.status == "AGREED"
+    assert r1.checkout_url == f"/api/v1/checkout/{session.id}"
 
-    # Attempting another proposal on AGREED session
-    with pytest.raises(InvalidStateTransitionError):
-        service.handle_buyer_move(session.id, BuyerMove(quantity=500, offered_price=440.0))
+    # Attempting another proposal or accept on AGREED session returns agreed response with checkout_url
+    r2 = service.handle_buyer_move(session.id, BuyerMove(quantity=500, offered_price=440.0))
+    assert r2.status == "AGREED"
+    assert r2.checkout_url == f"/api/v1/checkout/{session.id}"
+    assert r2.final_agreed_price == 450.0
+
+    # Also test accept_offer on AGREED session
+    r3 = service.accept_offer(session.id, buyer_id="buyer_07")
+    assert r3.status == "AGREED"
+    assert r3.checkout_url == f"/api/v1/checkout/{session.id}"
 
     # Proves no second LLM call occurred
     assert mock_llm.call_count == 1
+
+
+def test_terminal_rejected_session_rejects_subsequent_buyer_proposals(
+    sample_catalog_sku: Dict[str, Any],
+    sample_pricing_policy: Dict[str, Any],
+) -> None:
+    """Buyer sends move after session is REJECTED -> raises InvalidStateTransitionError."""
+    repo = InMemorySessionRepository()
+    repo.save_catalog_sku(sample_catalog_sku)
+    repo.save_pricing_policy(sample_pricing_policy)
+    mock_llm = MockDecisionLLMClient([
+        NegotiationDecision(counter_price=450.0, justification="Counter", internal_reasoning="", should_accept=False, needs_approval=False)
+    ])
+    service = NegotiationSessionService(repo=repo, llm_client=mock_llm)
+    session = service.create_session(buyer_id="buyer_07", sku_code="SKU-1042")
+    service.handle_buyer_move(session.id, BuyerMove(quantity=500, offered_price=400.0))
+    service.decline_offer(session.id, buyer_id="buyer_07")
+
+    with pytest.raises(InvalidStateTransitionError):
+        service.handle_buyer_move(session.id, BuyerMove(quantity=500, offered_price=440.0))
 
 
 def test_scenario_8_lazy_check_expires_stale_final_offer(
@@ -916,7 +953,9 @@ def test_merchant_responds_before_timeout_is_not_affected(
 
     # Assert: AGREED, not affected by timeout logic
     assert result.status == "AGREED"
-    assert result.payment_link_url is not None
+    assert result.amount is not None
+    assert result.amount_paise is not None
+    assert result.checkout_url is not None
 
 
 def test_buyer_guardrail_evaluation_records_passed_and_violated_rules(

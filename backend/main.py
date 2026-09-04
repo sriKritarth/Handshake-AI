@@ -123,6 +123,7 @@ async def auth_middleware(request: Request, call_next):
     if (
         request.url.path in UNPROTECTED_PATHS
         or request.url.path.startswith("/api/v1/checkout/")
+        or request.url.path.startswith("/checkout/")
         or request.method == "OPTIONS"
     ):
         return await call_next(request)

@@ -2,16 +2,20 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from api.auth import AuthenticatedClient, api_key_header
+from session.fsm import InvalidStateTransitionError
+from session.models import BuyerMove, MerchantDecisionRequest as DomainMDR
 from api.schemas import (
     AuditLogResponse,
     BuyerMoveRequest,
@@ -20,6 +24,9 @@ from api.schemas import (
     NegotiationResponse,
     SessionResponse,
 )
+
+_templates_dir = Path(__file__).resolve().parent.parent.parent / "templates"
+templates = Jinja2Templates(directory=str(_templates_dir))
 
 limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(prefix="/api/v1", tags=["negotiation"], dependencies=[Depends(api_key_header)])
@@ -69,13 +76,13 @@ class VerifyResponse(BaseModel):
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _session_record_to_response(record, sku_code: str = "", offer_events: Optional[list] = None) -> SessionResponse:
-    """Convert a SessionRecord (domain object) into an HTTP SessionResponse.
-
-    Populates latest_seller_price and latest_buyer_price by scanning the
-    offer_events list (most-recent-first) so the buyer agent always receives
-    the freshest merchant/seller counter when polling after PENDING_APPROVAL.
-    """
+def _session_record_to_response(
+    record, 
+    sku_code: Optional[str] = None, 
+    offer_events: Optional[List[Dict[str, Any]]] = None,
+    razorpay_order: Optional[Dict[str, Any]] = None,
+) -> SessionResponse:
+    """Map internal domain SessionRecord to API SessionResponse schema."""
     latest_seller: Optional[float] = None
     latest_buyer: Optional[float] = None
 
@@ -91,7 +98,15 @@ def _session_record_to_response(record, sku_code: str = "", offer_events: Option
                 break
 
     checkout_url = f"/api/v1/checkout/{record.id}" if record.status == "AGREED" else None
-    #check this
+    rzp_short_url = razorpay_order.get("short_url") if razorpay_order else None
+    amount = None
+    amount_paise = None
+    currency = None
+    if record.status == "AGREED" and record.final_agreed_price and record.quantity:
+        amount = float(record.final_agreed_price * record.quantity)
+        amount_paise = int(round(amount * 100))
+        currency = "INR"
+
     return SessionResponse(
         session_id=record.id,
         status=record.status,
@@ -101,6 +116,10 @@ def _session_record_to_response(record, sku_code: str = "", offer_events: Option
         latest_seller_price=latest_seller,
         latest_buyer_price=latest_buyer,
         final_agreed_price=record.final_agreed_price,
+        amount=amount,
+        amount_paise=amount_paise,
+        currency=currency,
+        razorpay_short_url=rzp_short_url,
         checkout_url=checkout_url,
         expires_at=record.expires_at.isoformat() if record.expires_at else None,
     )
@@ -108,17 +127,23 @@ def _session_record_to_response(record, sku_code: str = "", offer_events: Option
 
 def _domain_session_response_to_api(resp) -> NegotiationResponse:
     """Convert a domain SessionResponse into the HTTP NegotiationResponse."""
+    checkout_url = resp.checkout_url
+    if not checkout_url and resp.status == "AGREED":
+        checkout_url = f"/api/v1/checkout/{resp.session_id}"
     return NegotiationResponse(
         session_id=resp.session_id,
         status=resp.status,
         round=str(resp.current_round),
-        counter_price=resp.seller_proposed_price or resp.final_offer_price,
+        counter_price=resp.seller_proposed_price or resp.final_offer_price or resp.final_agreed_price,
         counter_quantity=resp.counter_quantity,
         justification=resp.draft_justification,
         seller_justification=resp.internal_reasoning,
         message=resp.status_message,
+        amount=resp.amount,
+        amount_paise=resp.amount_paise,
+        currency=resp.currency,
         razorpay_short_url=resp.payment_link_url,
-        checkout_url=resp.checkout_url,
+        checkout_url=checkout_url,
         final_agreed_price=resp.final_agreed_price,
     )
 
@@ -148,7 +173,7 @@ async def create_session(
             buyer_id=req.buyer_id,
             sku_code=req.sku_code,
             channel=req.channel,
-            quantity=req.quantity,
+            quantity=req.quantity or 1,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
@@ -175,7 +200,8 @@ async def get_session(
     # Fetch offer events so latest_seller_price / latest_buyer_price are populated.
     # This is the critical field the buyer agent reads after a merchant counter.
     offer_events = service.repo.get_offer_events(session_id)
-    return _session_record_to_response(record, offer_events=offer_events)
+    rzp_order = service.repo.get_razorpay_order(session_id)
+    return _session_record_to_response(record, offer_events=offer_events, razorpay_order=rzp_order)
 
 
 # ---------------------------------------------------------------------------
@@ -200,8 +226,6 @@ async def buyer_move(
         quantity=req.quantity,
     )
     service = request.state.service
-    from session.models import BuyerMove
-
     move = BuyerMove(
         quantity=req.quantity,
         offered_price=req.offered_price,
@@ -212,6 +236,8 @@ async def buyer_move(
         result = service.handle_buyer_move(session_id, move)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+    except InvalidStateTransitionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -235,19 +261,12 @@ async def accept_offer(
 
     log.info("buyer_accept_request", session_id=session_id)
     service = request.state.service
-    from session.models import BuyerMove
-
-    # Accept is expressed as a buyer move with accept_last_offer=True
     try:
-        session = service.get_session(session_id)
-        move = BuyerMove(
-            quantity=session.quantity,
-            offered_price=None,
-            accept_last_offer=True,
-        )
-        result = service.handle_buyer_move(session_id, move)
+        result = service.accept_offer(session_id, buyer_id=client.client_name)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+    except InvalidStateTransitionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -272,29 +291,16 @@ async def decline_offer(
     log.info("buyer_decline_request", session_id=session_id)
     service = request.state.service
     try:
-        from session.fsm import InvalidStateTransitionError, NegotiationFSM
-
-        session = service.get_session(session_id)
-        fsm = NegotiationFSM(session)
-        fsm.reject()
-        service.repo.update_session(session)
-        service._append_audit(
-            session_id=session_id,
-            event_type="BUYER_DECLINED",
-            from_state="IN_PROGRESS",
-            to_state="REJECTED",
-            actor=client.client_name,
-            details={"reason": "Buyer voluntarily declined the negotiation"},
-        )
-    except Exception as exc:
+        result = service.decline_offer(session_id, buyer_id=client.client_name)
+    except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+    except InvalidStateTransitionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
-    log.info("buyer_declined", session_id=session_id, status="REJECTED")
-    return NegotiationResponse(
-        session_id=session_id,
-        status="REJECTED",
-        message="Negotiation declined by buyer.",
-    )
+    log.info("buyer_declined", session_id=session_id, status=result.status)
+    return _domain_session_response_to_api(result)
 
 
 # ---------------------------------------------------------------------------
@@ -321,9 +327,6 @@ async def merchant_decision(
     )
     service = request.state.service
 
-    # Map HTTP schema → domain model
-    from session.models import MerchantDecisionRequest as DomainMDR
-
     domain_req = DomainMDR(
         decision=req.action,
         counter_price=req.counter_price,
@@ -333,6 +336,8 @@ async def merchant_decision(
         result = service.handle_merchant_decision(session_id, domain_req)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
+    except InvalidStateTransitionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -487,3 +492,49 @@ async def verify_session(
 @router.get("/health")
 async def health():
     return {"status": "ok", "phase": "7", "engine": "negotiation-agent-v1"}
+
+
+# ---------------------------------------------------------------------------
+# Razorpay Settlement Checkout Route
+# ---------------------------------------------------------------------------
+
+@router.get("/checkout/{session_id}", response_class=HTMLResponse)
+async def checkout_page(
+    session_id: str,
+    request: Request,
+):
+    """Render minimal Razorpay settlement template if session is AGREED."""
+    service = request.state.service
+    try:
+        session = service.get_session(session_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if session.status != "AGREED":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Session is in status '{session.status}'. Checkout is only accessible for AGREED deals.",
+        )
+
+    sku = service.repo.get_catalog_sku_by_code(session.sku_id) or {}
+    unit_price = float(session.final_agreed_price or 0.0)
+    qty = int(session.quantity or 1)
+    amount = float(unit_price * qty)
+    amount_paise = int(round(amount * 100))
+    key_id = os.getenv("RAZORPAY_KEY_ID", "rzp_test_placeholder")
+
+    return templates.TemplateResponse(
+        request=request,
+        name="checkout.html",
+        context={
+            "session_id": session.id,
+            "sku_code": sku.get("sku_code", session.sku_id),
+            "product_name": sku.get("name", sku.get("sku_code", "B2B Wholesale Order")),
+            "quantity": qty,
+            "unit_price": unit_price,
+            "amount": amount,
+            "amount_paise": amount_paise,
+            "currency": "INR",
+            "key_id": key_id,
+        },
+    )

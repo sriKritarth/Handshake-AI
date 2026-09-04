@@ -12,3 +12,4 @@ razorpay
 slowapi
 structlog
 logging
+streamlit

@@ -18,8 +18,8 @@ from pydantic import BaseModel, Field
 class CreateSessionRequest(BaseModel):
     buyer_id: str = Field(description="Unique identifier for the buyer / buyer agent")
     sku_code: str = Field(description="Catalog SKU code to negotiate on")
-    quantity: int = Field(ge=1, description="Number of units being negotiated")
     channel: str = Field(default="CHAT", description="Communication channel")
+    quantity: Optional[int] = Field(default=None, ge=1, description="Initial requested quantity")
 
 
 class BuyerMoveRequest(BaseModel):
@@ -64,6 +64,9 @@ class SessionResponse(BaseModel):
     latest_buyer_price: Optional[float] = None
     counter_quantity: Optional[int] = None
     final_agreed_price: Optional[float] = None
+    amount: Optional[float] = None
+    amount_paise: Optional[int] = None
+    currency: Optional[str] = "INR"
     razorpay_short_url: Optional[str] = None
     checkout_url: Optional[str] = None
     expires_at: Optional[str] = None
@@ -81,11 +84,16 @@ class NegotiationResponse(BaseModel):
     justification: Optional[str] = None
     seller_justification: Optional[str] = None
     message: Optional[str] = None
+    amount: Optional[float] = None
+    amount_paise: Optional[int] = None
+    currency: Optional[str] = "INR"
     razorpay_short_url: Optional[str] = None
     checkout_url: Optional[str] = None
     final_agreed_price: Optional[float] = None
 
     model_config = {"from_attributes": True}
+
+
 
 
 class AuditLogResponse(BaseModel):

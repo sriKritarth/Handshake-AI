@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Settlement Checkout | Handshake AI</title>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+    body {
+      background: #0b0c10;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .checkout-card {
+      background: #16181f;
+      border: 1px solid #232733;
+      border-radius: 16px;
+      max-width: 480px;
+      width: 100%;
+      padding: 32px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+    }
+    .brand-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #232733;
+    }
+    .brand-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #f8fafc;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(16, 185, 129, 0.15);
+      color: #10b981;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .order-summary {
+      background: #1a1e29;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 24px;
+      border: 1px solid #272d3b;
+    }
+    .item-title {
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: #f1f5f9;
+      margin-bottom: 4px;
+    }
+    .item-subtitle {
+      font-size: 0.85rem;
+      color: #94a3b8;
+      margin-bottom: 16px;
+    }
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.875rem;
+      color: #94a3b8;
+      margin-bottom: 10px;
+    }
+    .detail-row.total {
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid #272d3b;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+    .total-amount {
+      color: #10b981;
+      font-size: 1.35rem;
+    }
+    .btn-pay {
+      width: 100%;
+      background: #2563eb;
+      color: #ffffff;
+      border: none;
+      border-radius: 10px;
+      padding: 14px 20px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+    }
+    .btn-pay:hover {
+      background: #1d4ed8;
+      box-shadow: 0 6px 20px rgba(37, 99, 235, 0.45);
+    }
+    .footer-note {
+      text-align: center;
+      margin-top: 18px;
+      font-size: 0.75rem;
+      color: #64748b;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .paid-card {
+      display: none;
+      text-align: center;
+      padding: 12px 0;
+    }
+    .paid-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: rgba(16, 185, 129, 0.15);
+      color: #10b981;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      font-size: 1.8rem;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .paid-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #f8fafc;
+      margin-bottom: 6px;
+    }
+    .paid-subtitle {
+      font-size: 0.875rem;
+      color: #94a3b8;
+      margin-bottom: 20px;
+    }
+    .paid-details {
+      background: #1a1e29;
+      border: 1px solid #272d3b;
+      border-radius: 10px;
+      padding: 16px;
+      font-size: 0.85rem;
+      text-align: left;
+      margin-bottom: 16px;
+    }
+    code {
+      background: rgba(255, 255, 255, 0.08);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+      color: #cbd5e1;
+    }
+  </style>
+</head>
+<body>
+  <div class="checkout-card">
+    <div class="brand-header">
+      <div class="brand-title">
+        <span>🤝</span>
+        <span>Handshake AI</span>
+      </div>
+      <div class="status-badge">
+        <span>●</span>
+        <span>AGREED</span>
+      </div>
+    </div>
+
+    <!-- Active Checkout Section -->
+    <div id="checkout-view">
+      <div class="order-summary">
+        <div class="item-title">{{ product_name }}</div>
+        <div class="item-subtitle">SKU: {{ sku_code }} • Autonomous Negotiation Finalized</div>
+        <div class="detail-row">
+          <span>Quantity</span>
+          <span><strong>{{ quantity }}</strong> units</span>
+        </div>
+        <div class="detail-row">
+          <span>Agreed Unit Price</span>
+          <span>₹{{ "%.2f"|format(unit_price) }}</span>
+        </div>
+        <div class="detail-row">
+          <span>Taxes & Processing</span>
+          <span>Included</span>
+        </div>
+        <div class="detail-row total">
+          <span>Total Payable</span>
+          <span class="total-amount">₹{{ "%.2f"|format(amount) }}</span>
+        </div>
+      </div>
+
+      <button id="pay-btn" class="btn-pay">
+        <span>Pay ₹{{ "%.2f"|format(amount) }} with Razorpay</span>
+      </button>
+
+      <div class="footer-note">
+        <span>🔒</span>
+        <span>Secured with Razorpay Standard Checkout</span>
+      </div>
+    </div>
+
+    <!-- Payment Completed State -->
+    <div id="payment-success" class="paid-card">
+      <div class="paid-icon">✓</div>
+      <h2 class="paid-title">Payment Completed</h2>
+      <p class="paid-subtitle">Deal successfully settled via Razorpay</p>
+      <div class="paid-details">
+        <div class="detail-row"><span>Status:</span> <strong style="color: #10b981;">PAID / SETTLED</strong></div>
+        <div class="detail-row"><span>Product:</span> <span>{{ product_name }}</span></div>
+        <div class="detail-row"><span>Quantity:</span> <span>{{ quantity }} units</span></div>
+        <div class="detail-row"><span>Total Settled:</span> <strong style="color: #10b981;">₹{{ "%.2f"|format(amount) }}</strong></div>
+        <div class="detail-row"><span>Payment ID:</span> <code id="payment-id-val"></code></div>
+        <div class="detail-row"><span>Session ID:</span> <code>{{ session_id }}</code></div>
+      </div>
+      <p style="font-size: 0.8rem; color: #64748b;">Cryptographic audit log has been updated for this session.</p>
+    </div>
+  </div>
+
+  <script>
+    const options = {
+      key: "{{ key_id }}",
+      amount: "{{ amount_paise }}",
+      currency: "{{ currency }}",
+      name: "Handshake AI",
+      description: "{{ product_name }} ({{ quantity }} units)",
+      handler: function (response) {
+        document.getElementById("checkout-view").style.display = "none";
+        document.getElementById("payment-success").style.display = "block";
+        document.getElementById("payment-id-val").innerText = response.razorpay_payment_id || "pay_demo_success";
+      },
+      prefill: {
+        name: "B2B Buyer",
+        email: "buyer@example.com"
+      },
+      theme: {
+        color: "#2563eb"
+      }
+    };
+
+    const rzp = new Razorpay(options);
+    document.getElementById("pay-btn").onclick = function (e) {
+      e.preventDefault();
+      rzp.open();
+    };
+  </script>
+</body>
+</html>
