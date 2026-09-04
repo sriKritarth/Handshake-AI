@@ -919,3 +919,157 @@ def test_merchant_responds_before_timeout_is_not_affected(
     assert result.payment_link_url is not None
 
 
+def test_buyer_guardrail_evaluation_records_passed_and_violated_rules(
+    sample_catalog_sku: Dict[str, Any],
+    sample_pricing_policy: Dict[str, Any],
+) -> None:
+    """GuardrailEngine evaluates buyer request before seller response and records rule breakdown."""
+    repo = InMemorySessionRepository()
+    repo.save_catalog_sku(sample_catalog_sku)
+    repo.save_pricing_policy(sample_pricing_policy)
+
+    mock_llm = MockDecisionLLMClient([
+        NegotiationDecision(
+            counter_price=490.0,
+            justification="Counter at 490",
+            internal_reasoning="Anchoring high",
+            should_accept=False,
+            needs_approval=False,
+        )
+    ])
+
+    service = NegotiationSessionService(repo=repo, llm_client=mock_llm)
+    session = service.create_session(buyer_id="buyer_guardrail_audit", sku_code="SKU-1042", quantity=100)
+
+    # Buyer offers 300 (below floor 390)
+    service.handle_buyer_move(session.id, BuyerMove(quantity=100, offered_price=300.0, buyer_message="Can you do 300?"))
+
+    events = repo.get_offer_events(session.id)
+    assert len(events) == 2  # 1 buyer move + 1 seller counter
+
+    buyer_ev = events[0]
+    assert buyer_ev["sender"] == "BUYER"
+    assert buyer_ev["proposed_price"] == 300.0
+    assert buyer_ev["guardrail_clamped_price"] == 429.97
+    assert buyer_ev["is_rule_passed"] is False
+    assert "floor_price" in buyer_ev["violated_rules"]
+    assert "round_limit" in buyer_ev["passed_rules"]
+    assert buyer_ev["rule_reason"] is not None
+
+
+def test_excess_requested_quantity_triggers_inventory_escalation(
+    sample_catalog_sku: Dict[str, Any],
+    sample_pricing_policy: Dict[str, Any],
+) -> None:
+    """When buyer_quantity > stock_quantity - 50, agent escalates with 'Less inventory stocks left'."""
+    repo = InMemorySessionRepository()
+    sku_data = dict(sample_catalog_sku)
+    sku_data["inventory_qty"] = 80
+    repo.save_catalog_sku(sku_data)
+    repo.save_pricing_policy(sample_pricing_policy)
+
+    mock_llm = MockDecisionLLMClient([
+        NegotiationDecision(
+            counter_price=480.0,
+            justification="We can offer 480.",
+            internal_reasoning="Anchoring high",
+            should_accept=False,
+            needs_approval=False,
+        ),
+    ])
+
+    service = NegotiationSessionService(repo=repo, llm_client=mock_llm)
+    session = service.create_session(buyer_id="buyer_excess_qty", sku_code="SKU-1042", quantity=120)
+
+    # Buyer requests 120 units (stock is 80, leaves less than 50 safety buffer) -> ESCALATES
+    resp = service.handle_buyer_move(
+        session.id,
+        BuyerMove(quantity=120, offered_price=420.0, buyer_message="Need 120 units bulk deal.")
+    )
+
+    # 1. State must transition to PENDING_APPROVAL
+    assert resp.status == "PENDING_APPROVAL"
+    # 2. Buyer justification indicates less inventory stocks left without disclosing exact stock count
+    assert "less inventory stocks left" in resp.draft_justification.lower()
+    assert "in stock" not in resp.draft_justification.lower()
+    assert "warehouse" not in resp.draft_justification.lower()
+    # 3. Status message indicates less inventory stocks left
+    assert "less inventory stocks left" in resp.status_message.lower()
+    # 4. Merchant internal reasoning captures the inventory shortage
+    assert "safe inventory threshold" in resp.internal_reasoning.lower()
+
+
+def test_safe_inventory_quantity_counters_without_stock_disclosure(
+    sample_catalog_sku: Dict[str, Any],
+    sample_pricing_policy: Dict[str, Any],
+) -> None:
+    """When buyer_quantity <= stock_quantity - 50, agent counters normally without disclosing stock quantity."""
+    repo = InMemorySessionRepository()
+    sku_data = dict(sample_catalog_sku)
+    sku_data["inventory_qty"] = 200
+    repo.save_catalog_sku(sku_data)
+    repo.save_pricing_policy(sample_pricing_policy)
+
+    mock_llm = MockDecisionLLMClient([
+        NegotiationDecision(
+            counter_price=480.0,
+            justification="We can offer a preferential rate of ₹480 per unit for your bulk batch.",
+            internal_reasoning="Safe inventory level, standard counter",
+            should_accept=False,
+            needs_approval=False,
+        ),
+    ])
+
+    service = NegotiationSessionService(repo=repo, llm_client=mock_llm)
+    session = service.create_session(buyer_id="buyer_safe_qty", sku_code="SKU-1042", quantity=100)
+
+    # 100 <= 200 - 50 (150) -> Safe, normal counter proposed
+    resp = service.handle_buyer_move(
+        session.id,
+        BuyerMove(quantity=100, offered_price=420.0, buyer_message="Need 100 units.")
+    )
+
+    assert resp.status == "IN_PROGRESS"
+    assert resp.seller_proposed_price == 480.0
+    # Warehouse stock count (200) is NOT disclosed to buyer
+    assert "200" not in resp.draft_justification
+    assert "in stock" not in resp.draft_justification.lower()
+
+
+def test_excess_requested_quantity_zero_stock_fails_fast(
+    sample_catalog_sku: Dict[str, Any],
+    sample_pricing_policy: Dict[str, Any],
+) -> None:
+    """When SKU is completely out of stock (stock_qty = 0), fail-fast with clear error."""
+    repo = InMemorySessionRepository()
+    sku_data = dict(sample_catalog_sku)
+    sku_data["inventory_qty"] = 0
+    repo.save_catalog_sku(sku_data)
+    repo.save_pricing_policy(sample_pricing_policy)
+
+    service = NegotiationSessionService(repo=repo)
+    session = service.create_session(buyer_id="buyer_zero_stock", sku_code="SKU-1042", quantity=10)
+
+    with pytest.raises(ValueError, match="completely out of stock"):
+        service.handle_buyer_move(session.id, BuyerMove(quantity=10, offered_price=450.0))
+
+
+def test_excess_requested_quantity_accept_last_offer_fails_fast(
+    sample_catalog_sku: Dict[str, Any],
+    sample_pricing_policy: Dict[str, Any],
+) -> None:
+    """Buyer cannot accept a deal for more units than warehouse stock."""
+    repo = InMemorySessionRepository()
+    sku_data = dict(sample_catalog_sku)
+    sku_data["inventory_qty"] = 50
+    repo.save_catalog_sku(sku_data)
+    repo.save_pricing_policy(sample_pricing_policy)
+
+    service = NegotiationSessionService(repo=repo)
+    session = service.create_session(buyer_id="buyer_excess_accept", sku_code="SKU-1042", quantity=100)
+
+    with pytest.raises(ValueError, match="Insufficient stock"):
+        service.handle_buyer_move(session.id, BuyerMove(quantity=100, offered_price=450.0, accept_last_offer=True))
+
+
+

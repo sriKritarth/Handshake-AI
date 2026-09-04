@@ -1,10 +1,12 @@
 """All API route definitions for the B2B Negotiation Agent API (Phase 7)."""
 from __future__ import annotations
 
+import os
 from typing import Any, Dict, List, Optional
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -88,15 +90,18 @@ def _session_record_to_response(record, sku_code: str = "", offer_events: Option
             if latest_seller is not None and latest_buyer is not None:
                 break
 
+    checkout_url = f"/api/v1/checkout/{record.id}" if record.status == "AGREED" else None
+    #check this
     return SessionResponse(
         session_id=record.id,
         status=record.status,
         current_round=record.current_round,
-        quantity=record.quantity,
+        quantity=record.quantity or None,
         sku_code=sku_code or record.sku_id,
         latest_seller_price=latest_seller,
         latest_buyer_price=latest_buyer,
         final_agreed_price=record.final_agreed_price,
+        checkout_url=checkout_url,
         expires_at=record.expires_at.isoformat() if record.expires_at else None,
     )
 
@@ -108,9 +113,12 @@ def _domain_session_response_to_api(resp) -> NegotiationResponse:
         status=resp.status,
         round=str(resp.current_round),
         counter_price=resp.seller_proposed_price or resp.final_offer_price,
+        counter_quantity=resp.counter_quantity,
         justification=resp.draft_justification,
+        seller_justification=resp.internal_reasoning,
         message=resp.status_message,
         razorpay_short_url=resp.payment_link_url,
+        checkout_url=resp.checkout_url,
         final_agreed_price=resp.final_agreed_price,
     )
 
@@ -132,7 +140,6 @@ async def create_session(
         "session_create_request",
         buyer_id=req.buyer_id,
         sku_code=req.sku_code,
-        quantity=req.quantity,
         channel=req.channel,
     )
     service = request.state.service

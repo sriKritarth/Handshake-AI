@@ -5,7 +5,7 @@ __pycache__
 /reports
 /tests/test_benchmark.py
 /tests/conftest.py
-
+.pytest_cache/
 
 
 

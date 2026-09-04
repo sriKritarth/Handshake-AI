@@ -62,8 +62,10 @@ class SessionResponse(BaseModel):
     sku_code: str
     latest_seller_price: Optional[float] = None
     latest_buyer_price: Optional[float] = None
+    counter_quantity: Optional[int] = None
     final_agreed_price: Optional[float] = None
     razorpay_short_url: Optional[str] = None
+    checkout_url: Optional[str] = None
     expires_at: Optional[str] = None
     message: Optional[str] = None
 
@@ -75,9 +77,12 @@ class NegotiationResponse(BaseModel):
     status: str
     round: Optional[str] = None
     counter_price: Optional[float] = None
+    counter_quantity: Optional[int] = None
     justification: Optional[str] = None
+    seller_justification: Optional[str] = None
     message: Optional[str] = None
     razorpay_short_url: Optional[str] = None
+    checkout_url: Optional[str] = None
     final_agreed_price: Optional[float] = None
 
     model_config = {"from_attributes": True}

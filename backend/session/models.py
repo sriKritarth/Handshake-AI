@@ -26,25 +26,34 @@ class NegotiationDecision(BaseModel):
         description=(
             "Your counter-offer price per unit in INR. "
             "MUST be greater than or equal to the floor price. "
+            "Round to clean whole rupee (e.g. 470 or 1380, no decimals). "
             "If should_accept is true, set this to the buyer's offered price. "
             "If needs_approval is true, set this to the buyer's offered price."
+        ),
+    )
+    counter_quantity: Optional[int] = Field(
+        default=None,
+        description=(
+            "Optional logrolling volume counter. When the buyer requests a steep discount below "
+            "their current tier price, you may offer to meet their price IF they increase order volume "
+            "to this quantity (helping clear inventory). Set to None if keeping the buyer's requested quantity."
         ),
     )
     justification: str = Field(
         ...,
         description=(
-            "One to two sentences the buyer will see explaining your price. "
-            "Reference quantity, product value, delivery, or market conditions. "
-            "NEVER reference your internal policy, floor price, or margin floor. "
-            "Keep it natural and conversational, not robotic."
+            "Persuasive commercial message the buyer will see explaining your counter-offer (2-3 sentences). "
+            "Highlight product quality, volume batching, warranty, delivery reliability. "
+            "If proposing a volume upsell, explain why the higher quantity unlocks the discount. "
+            "NEVER mention internal policies, formulas, gap percentages, floor price, or margin floor."
         ),
     )
     internal_reasoning: str = Field(
         ...,
         description=(
-            "Private reasoning for the merchant's audit log. Never shown to buyer. "
-            "Explain: what tier applies, what percentage you conceded this round, "
-            "how far the buyer is from your margin floor, and why you chose this price."
+            "Comprehensive strategic reasoning for merchant review and audit. Never shown to buyer. "
+            "Detail: applicable volume tier, gross margin % preserved, carrying cost/stock clearance contribution, "
+            "and tactical rationale for why this price/volume was chosen."
         ),
     )
     should_accept: bool = Field(
@@ -103,12 +112,15 @@ class SessionResponse(BaseModel):
     current_round: int
     max_rounds: int
     seller_proposed_price: Optional[float] = None
+    counter_quantity: Optional[int] = None
     quantity: int = 1
     draft_justification: Optional[str] = None
+    internal_reasoning: Optional[str] = None
     final_offer_price: Optional[float] = None
     final_agreed_price: Optional[float] = None
     pending_approval_price: Optional[float] = None
     expires_at: Optional[datetime] = None
     payment_link_url: Optional[str] = None
+    checkout_url: Optional[str] = None
     razorpay_order_id: Optional[str] = None
     status_message: str

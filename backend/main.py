@@ -119,8 +119,12 @@ async def root():
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
-    # Skip auth for root / health / docs / favicon
-    if request.url.path in UNPROTECTED_PATHS or request.method == "OPTIONS":
+    # Skip auth for root / health / docs / favicon / checkout
+    if (
+        request.url.path in UNPROTECTED_PATHS
+        or request.url.path.startswith("/api/v1/checkout/")
+        or request.method == "OPTIONS"
+    ):
         return await call_next(request)
 
     raw_key = request.headers.get("X-API-Key")

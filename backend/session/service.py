@@ -17,7 +17,7 @@ from session.db import (
     SupabaseSessionRepository,
 )
 from session.fsm import InvalidStateTransitionError, NegotiationFSM
-from session.guardrails import apply_post_llm_guardrails
+from session.guardrails import apply_post_llm_guardrails, evaluate_buyer_guardrails
 from session.models import (
     BuyerMove,
     MerchantDecisionRequest,
@@ -130,7 +130,7 @@ class NegotiationSessionService:
             raise ValueError(f"Pricing policy for SKU '{sku_id}' not found during acceptance re-validation.")
 
         fresh_floor = float(fresh_policy.get("floor_price", 0.0))
-        fresh_stock = int(fresh_sku.get("inventory_qty", 1000))
+        fresh_stock = int(fresh_sku.get("inventory_qty") or fresh_sku.get("stock_qty"))
 
         if agreed_price < fresh_floor:
             raise ValueError(
@@ -266,6 +266,19 @@ class NegotiationSessionService:
         min_margin_pct = policy.get("min_margin_pct", 0.0)
         margin_floor = max(cost_price * (1.0 + min_margin_pct / 100.0), floor_price)
 
+        # Warehouse stock validation
+        stock_qty = int(sku.get("inventory_qty") or sku.get("stock_qty") or 0)
+        req_qty = move.quantity or session.quantity
+        if stock_qty <= 0:
+            raise ValueError(
+                f"Insufficient stock — SKU '{session.sku_id}' is completely out of stock."
+            )
+
+        if move.accept_last_offer and req_qty > stock_qty:
+            raise ValueError(
+                f"Insufficient stock — requested {req_qty} units but only {stock_qty} units available."
+            )
+
         # 4. Load offer history
         events = self.repo.get_offer_events(session_id)
 
@@ -324,7 +337,19 @@ class NegotiationSessionService:
 
         self.repo.update_session(session)
 
-        # 6. Record buyer offer event
+        # 6. Evaluate buyer request with the 6-rule GuardrailEngine (AFTER buyer request, BEFORE seller response)
+        guardrail_eval = evaluate_buyer_guardrails(
+            buyer_move=move,
+            catalog_sku=sku,
+            policy_dict=policy,
+            current_round=session.current_round,
+            max_rounds=max_rounds,
+            last_seller_price=last_seller_price,
+        )
+        passed_rules = [r.rule_name for r in guardrail_eval.rule_results if r.passed]
+        violated_rules = [r.rule_name for r in guardrail_eval.rule_results if not r.passed]
+
+        # Record buyer offer event with cryptographic guardrail outcomes
         buyer_event_id = None
         if move.offered_price is not None:
             buyer_event = OfferEventRecord(
@@ -333,7 +358,11 @@ class NegotiationSessionService:
                 sender="BUYER",
                 quantity=move.quantity,
                 proposed_price=move.offered_price,
-                guardrail_clamped_price=move.offered_price,
+                guardrail_clamped_price=guardrail_eval.final_price,
+                is_rule_passed=guardrail_eval.passed,
+                passed_rules=passed_rules,
+                violated_rules=violated_rules,
+                rule_reason=guardrail_eval.deciding_rule or guardrail_eval.blocking_rule,
                 public_justification=move.buyer_message,
             )
             self.repo.record_offer_event(buyer_event)
@@ -405,15 +434,55 @@ class NegotiationSessionService:
             duration_ms=_llm_duration_ms,
         )
 
-        # 9. Apply post-LLM guardrail clamp and logical conflict resolution
-        decision = apply_post_llm_guardrails(raw_decision, floor_price, margin_floor)
+        # 9. Apply post-LLM guardrail clamp, full rule waterfall, and logical conflict resolution
+        decision = apply_post_llm_guardrails(
+            decision=raw_decision,
+            floor_price=floor_price,
+            margin_floor=margin_floor,
+            policy_dict=policy,
+            catalog_sku=sku,
+            quantity=move.quantity,
+            current_round=session.current_round,
+            max_rounds=max_rounds,
+        )
+        if decision.counter_quantity and decision.counter_quantity > stock_qty:
+            decision.counter_quantity = stock_qty
+
+        # Inventory Safety Reserve & Escalation Rule:
+        # if buyer_quantity <= stock_quantity - 50:
+        #     propose counter offer normally and do NOT disclose the quantity of the stock
+        # else:
+        #     escalate to merchant and return response with "Less inventory stocks left"
+        safety_stock_buffer = int(policy.get("safety_stock_buffer", sku.get("safety_stock_buffer", 50)))
+        safe_stock_limit = stock_qty - safety_stock_buffer
+
+        if not decision.should_accept:
+            if req_qty > safe_stock_limit:
+                # Insufficient stock or leaves less than reserve buffer (50 units) -> ESCALATE
+                decision.needs_approval = True
+                decision.justification = (
+                    "Less inventory stocks left. Your requested order volume has been escalated for executive merchant review to verify allocation."
+                )
+                decision.internal_reasoning = (
+                    f"Requested quantity ({req_qty}) exceeds safe inventory threshold "
+                    f"({stock_qty} available stock vs {safety_stock_buffer} safety buffer, limit: {safe_stock_limit}). "
+                    f"Escalated for merchant inventory allocation review."
+                )
+            else:
+                # Safe inventory (buyer_quantity <= stock_quantity - 50) -> propose counter-offer without disclosing stock quantity
+                leaks_stock = any(w in decision.justification.lower() for w in ["in stock", "warehouse", "clearance rate", "clear our inventory", "remaining stock"])
+                if leaks_stock:
+                    decision.justification = (
+                        f"We can authorize a preferential rate of ₹{decision.counter_price:.2f}/unit for your order of {req_qty} units, "
+                        f"backed by complete manufacturer warranty and expedited dispatch."
+                    )
 
         # 10. Record seller response offer event
         seller_event = OfferEventRecord(
             session_id=session.id,
             round_number=session.current_round,
             sender="SELLER_GUARDRAIL",
-            quantity=move.quantity,
+            quantity=decision.counter_quantity or move.quantity,
             proposed_price=decision.counter_price,
             guardrail_clamped_price=decision.counter_price,
             rule_reason=decision.internal_reasoning,
@@ -426,17 +495,19 @@ class NegotiationSessionService:
         status_msg = ""
 
         if decision.should_accept:
+            deal_quantity = decision.counter_quantity or move.quantity
+            session.quantity = deal_quantity
             # Re-validate against fresh stock and policy
             log.info(
                 "revalidation_start",
                 session_id=session_id,
                 agreed_price=decision.counter_price,
-                quantity=move.quantity,
+                quantity=deal_quantity,
             )
             try:
                 self._revalidate_acceptance(
                     sku_id=session.sku_id,
-                    quantity=move.quantity,
+                    quantity=deal_quantity,
                     agreed_price=decision.counter_price,
                 )
                 fresh_policy = self.repo.get_pricing_policy_by_sku_id(sku["id"])
@@ -477,7 +548,7 @@ class NegotiationSessionService:
                 payment_res = self.payment_service.create_payment_link(
                     session_id=session.id,
                     sku_code=sku.get("sku_code", sku["id"]),
-                    quantity=move.quantity,
+                    quantity=session.quantity,
                     unit_price=decision.counter_price,
                     buyer_id=session.buyer_id,
                 )
@@ -490,7 +561,7 @@ class NegotiationSessionService:
                 )
                 log.info(
                     "razorpay_link_created",
-                    session_id=session.id,
+                    session_id=session_id,
                     amount_paise=payment_res.amount,
                     short_url=payment_res.payment_link_url,
                 )
@@ -518,7 +589,10 @@ class NegotiationSessionService:
                 status="PENDING",
                 notes=decision.internal_reasoning,
             )
-            status_msg = f"Proposed price of ₹{decision.counter_price:.2f} requires merchant escalation. Merchant has 30 minutes to respond."
+            if "less inventory" in decision.justification.lower():
+                status_msg = "Less inventory stocks left. Request requires merchant escalation. Merchant has 30 minutes to respond."
+            else:
+                status_msg = f"Proposed price of ₹{decision.counter_price:.2f} requires merchant escalation. Merchant has 30 minutes to respond."
 
         elif session.current_round >= max_rounds:
             # Transition to FINAL_OFFER take-it-or-leave-it
@@ -559,6 +633,7 @@ class NegotiationSessionService:
             details={
                 "round": session.current_round,
                 "proposed_price": decision.counter_price,
+                "counter_quantity": decision.counter_quantity,
                 "should_accept": decision.should_accept,
                 "needs_approval": decision.needs_approval,
                 "justification": decision.justification,
@@ -573,13 +648,16 @@ class NegotiationSessionService:
             current_round=session.current_round,
             max_rounds=max_rounds,
             seller_proposed_price=decision.counter_price,
-            quantity=move.quantity,
+            counter_quantity=decision.counter_quantity,
+            quantity=session.quantity,
             draft_justification=decision.justification,
+            internal_reasoning=decision.internal_reasoning,
             final_offer_price=session.final_offer_price,
             final_agreed_price=session.final_agreed_price,
             pending_approval_price=session.pending_approval_price,
             expires_at=session.expires_at,
             payment_link_url=payment_res.payment_link_url if payment_res else None,
+            checkout_url=payment_res.checkout_url if payment_res else None,
             razorpay_order_id=payment_res.razorpay_order_id if payment_res else None,
             status_message=status_msg,
         )
@@ -703,8 +781,10 @@ class NegotiationSessionService:
             status=session.status,
             current_round=session.current_round,
             max_rounds=5,
+            quantity=session.quantity,
             final_agreed_price=session.final_agreed_price,
             payment_link_url=payment_res.payment_link_url if payment_res else None,
+            checkout_url=payment_res.checkout_url if payment_res else None,
             razorpay_order_id=payment_res.razorpay_order_id if payment_res else None,
             status_message=status_msg,
         )
@@ -722,14 +802,17 @@ class NegotiationSessionService:
         events = self.repo.get_offer_events(session_id)
         sku = self.repo.get_catalog_sku_by_code(session.sku_id)
 
-        # Get latest seller proposed price
+        # Get latest seller proposed price and quantity
         latest_price = sku.get("base_price", 500.0)
+        latest_quantity = session.quantity
         for ev in reversed(events):
             if str(ev.get("sender")).upper() in ("SELLER_AI", "SELLER_GUARDRAIL", "MERCHANT"):
                 latest_price = float(ev.get("proposed_price", latest_price))
+                if ev.get("quantity"):
+                    latest_quantity = int(ev["quantity"])
                 break
 
-        move = BuyerMove(quantity=session.quantity, offered_price=latest_price, accept_last_offer=True)
+        move = BuyerMove(quantity=latest_quantity, offered_price=latest_price, accept_last_offer=True)
         return self.handle_buyer_move(session_id, move)
 
     def decline_offer(self, session_id: str, buyer_id: str) -> SessionResponse:

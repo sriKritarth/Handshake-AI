@@ -100,6 +100,10 @@ class BaseSessionRepository(ABC):
         pass
 
     @abstractmethod
+    def get_razorpay_order(self, session_id: str) -> Optional[Dict[str, Any]]:
+        pass
+
+    @abstractmethod
     def append_audit_log(self, log_entry: Dict[str, Any]) -> None:
         pass
 
@@ -196,6 +200,9 @@ class InMemorySessionRepository(BaseSessionRepository):
         }
         self.razorpay_orders[session_id] = order
         return order
+
+    def get_razorpay_order(self, session_id: str) -> Optional[Dict[str, Any]]:
+        return self.razorpay_orders.get(session_id)
 
     def append_audit_log(self, log_entry: Dict[str, Any]) -> None:
         self.audit_logs.setdefault(log_entry["session_id"], []).append(log_entry)
@@ -366,6 +373,20 @@ class SupabaseSessionRepository(BaseSessionRepository):
         }
         res = self.client.table("razorpay_orders").insert(payload).execute()
         return res.data[0] if res.data else payload
+
+    def get_razorpay_order(self, session_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            res = (
+                self.client.table("razorpay_orders")
+                .select("*")
+                .eq("session_id", session_id)
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            return res.data[0] if res.data else None
+        except Exception:
+            return None
 
     def append_audit_log(self, log_entry: Dict[str, Any]) -> None:
         payload = dict(log_entry)
