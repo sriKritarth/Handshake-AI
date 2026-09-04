@@ -30,7 +30,7 @@ def _make_client() -> instructor.Instructor:
 
 
 class BuyerAgent:
-    """LLM buyer agent that negotiates against the seller API.
+    """LLM buyer agent that negotiates against the seller API with Total Outlay & Budget awareness.
 
     config = {
         "product_name": "Premium T-Shirt",
@@ -41,27 +41,45 @@ class BuyerAgent:
         "walk_away_price": 1350.0, # absolute max you'll pay
         "opening_offer": 1000.0,   # your first offer (low anchor)
         "max_rounds":    5,
+        "max_budget":    67500.0,  # optional, defaults to quantity * walk_away_price
+        "max_quantity":  62,       # optional, defaults to int(quantity * 1.25)
     }
     """
 
     def __init__(self, config: dict) -> None:
         self.config = config
         self.client = _make_client()
+
+        # Financial & capacity boundaries
+        self.base_quantity: int = int(config.get("quantity", 50))
+        self.target_price: float = float(config.get("target_price", 1150.0))
+        self.walk_away_price: float = float(config.get("walk_away_price", 1350.0))
+        self.target_budget: float = float(config.get("target_budget", self.base_quantity * self.target_price))
+        self.max_budget: float = float(config.get("max_budget", self.base_quantity * self.walk_away_price))
+        self.max_quantity: int = int(config.get("max_quantity", int(self.base_quantity * 1.25)))
+        self.min_quantity: int = int(config.get("min_quantity", max(1, int(self.base_quantity * 0.80))))
+
         self.system_prompt = build_buyer_system_prompt(config)
         self.history: list[dict] = []
         self.current_round = 0
         self.last_buyer_offer: float | None = None
+        self.last_buyer_quantity: int | None = None
         self.last_seller_counter: float | None = None
+        self.last_seller_quantity: int | None = None
 
     def _format_history(self) -> str:
         if not self.history:
             return "No prior rounds."
         lines = []
         for entry in self.history:
+            b_qty = entry.get("buyer_quantity", self.base_quantity)
+            s_qty = entry.get("seller_quantity", self.base_quantity)
+            b_total = entry["buyer_offer"] * b_qty
+            s_total = entry["seller_counter"] * s_qty
             lines.append(
                 f"Round {entry['round']}:\n"
-                f"  → Buyer offered ₹{entry['buyer_offer']:.2f} — \"{entry['buyer_message']}\"\n"
-                f"  ← Seller countered ₹{entry['seller_counter']:.2f} — \"{entry['seller_justification']}\""
+                f"  → Buyer offered ₹{entry['buyer_offer']:.2f}/unit for {b_qty} units (Total: ₹{b_total:,.2f}) — \"{entry['buyer_message']}\"\n"
+                f"  ← Seller countered ₹{entry['seller_counter']:.2f}/unit for {s_qty} units (Total: ₹{s_total:,.2f}) — \"{entry['seller_justification']}\""
             )
         return "\n".join(lines)
 
@@ -69,18 +87,22 @@ class BuyerAgent:
         self,
         seller_counter: float | None = None,
         seller_justification: str | None = None,
+        seller_quantity: int | None = None,
     ) -> BuyerDecision:
-        """Return the buyer's next decision via Groq LLM."""
+        """Return the buyer's next decision via Groq LLM with dual-metric total outlay optimization."""
         self.current_round += 1
+        eff_seller_quantity = seller_quantity if seller_quantity is not None else self.base_quantity
 
         if self.current_round == 1:
             user_prompt = build_buyer_round_one_prompt(self.config)
-        elif self.current_round >= self.config["max_rounds"]:
+        elif self.current_round >= self.config.get("max_rounds", 5):
             user_prompt = build_buyer_final_round_prompt(
                 self.config,
                 seller_counter,
                 self._format_history(),
-                self.last_buyer_offer,
+                self.last_buyer_offer or self.config.get("opening_offer", self.target_price * 0.85),
+                seller_quantity=eff_seller_quantity,
+                last_buyer_quantity=self.last_buyer_quantity or self.base_quantity,
             )
         else:
             user_prompt = build_buyer_middle_round_prompt(
@@ -88,7 +110,9 @@ class BuyerAgent:
                 seller_counter,
                 self.current_round,
                 self._format_history(),
-                self.last_buyer_offer,
+                self.last_buyer_offer or self.config.get("opening_offer", self.target_price * 0.85),
+                seller_quantity=eff_seller_quantity,
+                last_buyer_quantity=self.last_buyer_quantity or self.base_quantity,
             )
 
         decision: BuyerDecision = self.client.chat.completions.create(
@@ -101,13 +125,43 @@ class BuyerAgent:
             temperature=0.3,
         )
 
-        # Post-LLM guardrail 1: never exceed walk-away price
-        if decision.offer_price > self.config["walk_away_price"]:
-            decision.offer_price = self.config["walk_away_price"]
+        # Ensure default offer_quantity if missing or non-positive
+        if not decision.offer_quantity or decision.offer_quantity <= 0:
+            decision.offer_quantity = self.base_quantity
+
+        # Post-LLM Guardrail 1: Hard Total Outlay & Budget Cap Protection on Accept
+        # When seller inflates quantity beyond max_quantity or total outlay beyond max_budget:
+        # e.g., Seller asks ₹320 for 50 units (₹16,000) when buyer planned 35 units @ ₹340 (Budget cap ₹12,600).
+        if decision.should_accept and seller_counter is not None:
+            seller_total_outlay = seller_counter * eff_seller_quantity
+            violates_budget = seller_total_outlay > self.max_budget
+            violates_storage = eff_seller_quantity > self.max_quantity
+            violates_unit_price = seller_counter > self.walk_away_price
+
+            if violates_budget or violates_storage or violates_unit_price:
+                decision.should_accept = False
+                affordable_qty = min(self.max_quantity, max(self.min_quantity, int(self.max_budget // seller_counter)))
+                decision.offer_quantity = affordable_qty
+                decision.offer_price = seller_counter
+                decision.total_outlay = round(decision.offer_price * decision.offer_quantity, 2)
+                reason_trigger = "budget cap" if violates_budget else ("volume limit" if violates_storage else "walk-away price")
+                decision.internal_reasoning += (
+                    f" [GUARDRAIL: Rejected acceptance — seller proposal of {eff_seller_quantity} units at ₹{seller_counter:.2f} "
+                    f"(Total ₹{seller_total_outlay:,.2f}) breaches {reason_trigger} (Max Budget: ₹{self.max_budget:,.2f}, Max Qty: {self.max_quantity}). "
+                    f"Countering with affordable batch of {affordable_qty} units at ₹{seller_counter:.2f} (Total ₹{decision.total_outlay:,.2f}).]"
+                )
+                decision.message = (
+                    f"We appreciate the ₹{seller_counter:.2f} unit rate, but our procurement budget is capped at ₹{self.max_budget:,.0f}. "
+                    f"We can commit to {affordable_qty} units at ₹{seller_counter:.2f} (total ₹{decision.total_outlay:,.0f})."
+                )
+
+        # Post-LLM Guardrail 2: Never exceed walk-away unit price
+        if decision.offer_price > self.walk_away_price:
+            decision.offer_price = self.walk_away_price
             decision.internal_reasoning += " [GUARDRAIL: clamped to walk-away price]"
 
-        # Post-LLM guardrail 2: cap per-round increase to MAX_OFFER_INCREASE_PCT
-        # Only applies when the buyer is NOT accepting (accepting = mirroring seller's price)
+        # Post-LLM Guardrail 3: Cap per-round unit price increase to MAX_OFFER_INCREASE_PCT
+        # Only applies when not accepting and not round 1
         if (
             not decision.should_accept
             and self.last_buyer_offer is not None
@@ -121,12 +175,26 @@ class BuyerAgent:
                     f" [GUARDRAIL: increase capped at {MAX_OFFER_INCREASE_PCT}% per round]"
                 )
 
-        # Round 1: always use configured opening offer (anchoring discipline)
+        # Round 1 anchoring discipline: always start at opening offer and base quantity
         if self.current_round == 1:
-            decision.offer_price = self.config["opening_offer"]
+            decision.offer_price = float(self.config.get("opening_offer", self.target_price * 0.85))
+            decision.offer_quantity = self.base_quantity
+            decision.should_accept = False
+            decision.should_walk_away = False
+
+        # Post-LLM Guardrail 4: Sync total outlay math
+        decision.total_outlay = round(decision.offer_price * decision.offer_quantity, 2)
+
+        # If buyer is accepting a valid seller offer, sync offer_price and offer_quantity to seller's terms
+        if decision.should_accept and seller_counter is not None:
+            decision.offer_price = seller_counter
+            decision.offer_quantity = eff_seller_quantity
+            decision.total_outlay = round(decision.offer_price * decision.offer_quantity, 2)
 
         self.last_buyer_offer = decision.offer_price
+        self.last_buyer_quantity = decision.offer_quantity
         self.last_seller_counter = seller_counter
+        self.last_seller_quantity = eff_seller_quantity
 
         return decision
 
@@ -136,12 +204,17 @@ class BuyerAgent:
         buyer_message: str,
         seller_counter: float,
         seller_justification: str,
+        buyer_quantity: int | None = None,
+        seller_quantity: int | None = None,
     ) -> None:
         """Record a completed round for future prompt context."""
         self.history.append({
             "round": self.current_round,
             "buyer_offer": buyer_offer,
             "buyer_message": buyer_message,
+            "buyer_quantity": buyer_quantity or self.base_quantity,
             "seller_counter": seller_counter,
             "seller_justification": seller_justification,
+            "seller_quantity": seller_quantity or self.base_quantity,
         })
+

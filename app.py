@@ -638,6 +638,8 @@ elif mode == "🤖 Agent-to-Agent (A2A)":
                 "walk_away_price": a2a_walkaway,
                 "opening_offer": a2a_opening,
                 "max_rounds": a2a_max_rounds,
+                "max_budget": a2a_qty * a2a_walkaway,
+                "max_quantity": int(a2a_qty * 1.25),
             }
 
             try:
@@ -649,6 +651,7 @@ elif mode == "🤖 Agent-to-Agent (A2A)":
 
             seller_counter = None
             seller_justification = None
+            seller_quantity = None
             deal_reached = False
 
             # Loop over rounds
@@ -660,7 +663,7 @@ elif mode == "🤖 Agent-to-Agent (A2A)":
 
                 # Buyer decision
                 try:
-                    decision = buyer.decide(seller_counter, seller_justification)
+                    decision = buyer.decide(seller_counter, seller_justification, seller_quantity=seller_quantity)
                 except Exception as exc:
                     st.error(f"Buyer LLM error: {exc}")
                     break
@@ -669,7 +672,7 @@ elif mode == "🤖 Agent-to-Agent (A2A)":
                     st.markdown(
                         f"""
                         <div class="chat-bubble-buyer">
-                            <b>🤖 Buyer LLM (Offer: ₹{decision.offer_price:,.2f})</b><br>
+                            <b>🤖 Buyer LLM (Offer: ₹{decision.offer_price:,.2f}/unit | Qty: {decision.offer_quantity} | Total: ₹{decision.total_outlay:,.2f})</b><br>
                             <i>"{decision.message}"</i><br>
                             <small style="color:#cbd5e1;"><b>Reasoning</b>: {decision.internal_reasoning}</small>
                         </div>
@@ -688,7 +691,7 @@ elif mode == "🤖 Agent-to-Agent (A2A)":
                 # Check if buyer accepts seller's counter
                 if decision.should_accept and seller_counter is not None:
                     with logs_container:
-                        st.success(f"🤝 Buyer accepts seller's counter at ₹{seller_counter:,.2f}!")
+                        st.success(f"🤝 Buyer accepts seller's counter at ₹{seller_counter:,.2f} for {seller_quantity or a2a_qty} units (Total: ₹{(seller_counter * (seller_quantity or a2a_qty)):,.2f})!")
                     accept_resp = api_request("POST", f"/sessions/{sid}/accept", role="buyer")
                     st.session_state.a2a_status = "AGREED"
                     deal_reached = True
@@ -701,7 +704,7 @@ elif mode == "🤖 Agent-to-Agent (A2A)":
                     f"/sessions/{sid}/moves",
                     role="buyer",
                     json={
-                        "quantity": a2a_qty,
+                        "quantity": decision.offer_quantity or a2a_qty,
                         "offered_price": decision.offer_price,
                         "buyer_message": b_msg,
                         "accept_last_offer": False,
@@ -717,14 +720,16 @@ elif mode == "🤖 Agent-to-Agent (A2A)":
                 s_resp = move_resp.json()
                 s_status = s_resp.get("status")
                 s_counter = s_resp.get("counter_price")
+                s_counter_qty = s_resp.get("counter_quantity") or a2a_qty
                 s_just = s_resp.get("justification") or s_resp.get("message")
                 counter_str = f"₹{s_counter:,.2f}" if s_counter is not None else "—"
+                s_total_str = f"₹{(s_counter * s_counter_qty):,.2f}" if s_counter is not None else "—"
 
                 with logs_container:
                     st.markdown(
                         f"""
                         <div class="chat-bubble-seller">
-                            <b>🤖 Seller Agent (Status: {s_status} | Counter: {counter_str})</b><br>
+                            <b>🤖 Seller Agent (Status: {s_status} | Counter: {counter_str} | Qty: {s_counter_qty} | Total: {s_total_str})</b><br>
                             {s_just}
                         </div>
                         """,
@@ -758,15 +763,17 @@ elif mode == "🤖 Agent-to-Agent (A2A)":
                             elif m_data.get("status") == "IN_PROGRESS":
                                 seller_counter = m_data.get("counter_price") or merchant_counter
                                 seller_justification = "Merchant Counter-Offer"
-                                buyer.record_round(decision.offer_price, decision.message, seller_counter, seller_justification)
+                                seller_quantity = s_counter_qty
+                                buyer.record_round(decision.offer_price, decision.message, seller_counter, seller_justification, buyer_quantity=decision.offer_quantity, seller_quantity=seller_quantity)
                                 continue
                     else:
                         st.session_state.a2a_status = "PENDING_APPROVAL"
                         break
 
                 seller_counter = s_counter
+                seller_quantity = s_counter_qty
                 seller_justification = s_just or ""
-                buyer.record_round(decision.offer_price, decision.message, seller_counter, seller_justification)
+                buyer.record_round(decision.offer_price, decision.message, seller_counter, seller_justification, buyer_quantity=decision.offer_quantity, seller_quantity=seller_quantity)
                 time.sleep(1)
 
             progress_bar.progress(1.0)

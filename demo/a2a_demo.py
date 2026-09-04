@@ -267,21 +267,28 @@ def run_negotiation(session_id: str, max_rounds: int) -> None:
     from demo.buyer_agent.agent import BuyerAgent
 
     # Align buyer config with server's max_rounds
-    config = {**BUYER_CONFIG, "max_rounds": max_rounds}
+    config = {
+        **BUYER_CONFIG,
+        "max_rounds": max_rounds,
+        "max_budget": BUYER_CONFIG.get("max_budget", QUANTITY * BUYER_CONFIG["walk_away_price"]),
+        "max_quantity": BUYER_CONFIG.get("max_quantity", int(QUANTITY * 1.25)),
+    }
     buyer = BuyerAgent(config)
 
     seller_counter: float | None = None
     seller_justification: str | None = None
+    seller_quantity: int | None = None
     deal_closed = False
 
     for _ in range(max_rounds + 1):   # +1 to handle accept on final-offer round
         _line()
 
         # ── Buyer LLM decides ────────────────────────────────────────────
-        decision = buyer.decide(seller_counter, seller_justification)
+        decision = buyer.decide(seller_counter, seller_justification, seller_quantity=seller_quantity)
 
         print(f"  Round {buyer.current_round}/{max_rounds} | "
-              f"Buyer → ₹{decision.offer_price:.2f}")
+              f"Buyer → ₹{decision.offer_price:.2f}/unit for {decision.offer_quantity} units "
+              f"(Total: ₹{decision.total_outlay:,.2f})")
         print(f"  Buyer says  : \"{decision.message}\"")
         print(f"  [Reasoning] : {decision.internal_reasoning}")
 
@@ -294,7 +301,8 @@ def run_negotiation(session_id: str, max_rounds: int) -> None:
 
         # ── Buyer accepts seller's last counter ───────────────────────────
         if decision.should_accept and seller_counter is not None:
-            print(f"\n  BUYER ACCEPTS ₹{seller_counter:.2f}")
+            eff_qty = seller_quantity or QUANTITY
+            print(f"\n  BUYER ACCEPTS ₹{seller_counter:.2f}/unit for {eff_qty} units (Total: ₹{(seller_counter * eff_qty):,.2f})")
             result = accept_offer(session_id)
             status = result.get("status")
             print(f"  Status: {status}")
@@ -310,15 +318,12 @@ def run_negotiation(session_id: str, max_rounds: int) -> None:
         buyer_message = decision.message[:497] + "..." if len(decision.message) > 500 else decision.message
 
         # ── POST /moves with retry-with-backoff on 429 ────────────────────
-        # slowapi allows 10 requests/minute on this endpoint.  Auto-merchant
-        # mode can fire moves back-to-back fast enough to exceed that window,
-        # so we back off and retry rather than crashing the demo.
         resp = None
         for attempt in range(1, MOVE_RETRY_ATTEMPTS + 1):
             resp = requests.post(
                 f"{API_BASE}/sessions/{session_id}/moves",
                 json={
-                    "quantity":        QUANTITY,
+                    "quantity":        decision.offer_quantity or QUANTITY,
                     "offered_price":   decision.offer_price,
                     "buyer_message":   buyer_message,
                     "accept_last_offer": False,
@@ -340,10 +345,12 @@ def run_negotiation(session_id: str, max_rounds: int) -> None:
 
         seller_resp = resp.json()
         status = seller_resp["status"]
+        s_counter_qty = seller_resp.get("counter_quantity") or QUANTITY
 
         print(f"\n  Seller status  : {status}")
         if seller_resp.get("counter_price"):
-            print(f"  Seller counter : ₹{seller_resp['counter_price']:.2f}")
+            c_price = seller_resp['counter_price']
+            print(f"  Seller counter : ₹{c_price:.2f} for {s_counter_qty} units (Total: ₹{(c_price * s_counter_qty):,.2f})")
         if seller_resp.get("justification"):
             print(f"  Justification  : {seller_resp['justification']}")
         if seller_resp.get("message"):
@@ -381,38 +388,39 @@ def run_negotiation(session_id: str, max_rounds: int) -> None:
                 return
 
             if merchant_status == "IN_PROGRESS":
-                # Merchant countered — buyer resumes with merchant's counter price.
-                #
-                # The POST /merchant-decision response is a NegotiationResponse which
-                # carries counter_price directly.  If that is missing (e.g. the
-                # auto-merchant path returned early), we fall back to polling
-                # GET /sessions/{id} whose latest_seller_price is now populated
-                # from the MERCHANT offer event recorded by service.handle_merchant_decision.
                 merchant_counter = merchant_result.get("counter_price")
                 if merchant_counter is None:
-                    # Poll once more to get the freshest value from the DB
                     synced = get_session(session_id)
                     merchant_counter = (
                         synced.get("latest_seller_price")
                         or seller_resp.get("counter_price")
                     )
-                print(f"\n  Merchant countered at \u20b9{merchant_counter}. Buyer resuming...")
+                print(f"\n  Merchant countered at ₹{merchant_counter}. Buyer resuming...")
                 seller_counter = merchant_counter
+                seller_quantity = s_counter_qty
                 seller_justification = merchant_result.get("message", "Merchant counter-offer")
-                # Record this round in buyer history before looping back
                 buyer.record_round(
                     decision.offer_price, decision.message,
                     seller_counter, seller_justification,
+                    buyer_quantity=decision.offer_quantity,
+                    seller_quantity=seller_quantity,
                 )
-                continue  # loop back to buyer.decide(seller_counter=merchant_counter)
+                continue
 
-            # Unknown status — sync and re-evaluate
             print(f"  Unexpected status after merchant: {merchant_status}. Syncing...")
             synced = get_session(session_id)
             print(f"  Synced status: {synced['status']}")
             return
 
-        # ── FINAL_OFFER — take it or leave it ────────────────────────────
+        seller_counter = seller_resp.get("counter_price")
+        seller_quantity = s_counter_qty
+        seller_justification = seller_resp.get("justification") or seller_resp.get("message") or ""
+        buyer.record_round(
+            decision.offer_price, decision.message,
+            seller_counter, seller_justification,
+            buyer_quantity=decision.offer_quantity,
+            seller_quantity=seller_quantity,
+        )
         if status == "FINAL_OFFER":
             final_price = seller_resp.get("counter_price") or seller_counter
             print(f"\n  FINAL OFFER: ₹{final_price:.2f} "

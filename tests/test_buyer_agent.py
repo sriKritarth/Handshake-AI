@@ -173,3 +173,58 @@ def test_buyer_increases_offers_gradually():
                 f"Round {i + 1}: buyer jumped {increase_pct:.1f}% "
                 f"(₹{prev_price:.0f} → ₹{curr_price:.0f}) — exceeds 8% guardrail"
             )
+
+
+def test_buyer_rejects_volume_upsell_exceeding_budget():
+    """Verify buyer agent rejects seller volume upsell when total spend exceeds budget.
+
+    Scenario:
+      - Buyer wants 35 units @ target ₹340 (Planned budget: ₹11,900, Walk-away ₹360 -> Max budget ₹12,600).
+      - Seller offers ₹320 (lower unit rate!) but upsells quantity to 50 units (Total outlay: ₹16,000).
+      - Buyer must NOT accept (should_accept == False) because total outlay ₹16,000 exceeds ₹12,600 budget.
+      - Buyer must counter with affordable batch (<= 39 units) respecting budget constraint.
+    """
+    config = {
+        "product_name": "Premium Cotton T-Shirt",
+        "sku_code": "TSH-PREM-001",
+        "quantity": 35,
+        "list_price": 499.0,
+        "target_price": 340.0,
+        "walk_away_price": 360.0,
+        "opening_offer": 300.0,
+        "max_rounds": 5,
+        "max_budget": 12600.0,  # 35 * 360
+        "max_quantity": 43,     # 35 * 1.25 approx
+    }
+    agent = BuyerAgent(config)
+
+    # Round 1: Buyer opens
+    d1 = agent.decide()
+    assert d1.offer_price == 300.0
+    assert d1.offer_quantity == 35
+    assert not d1.should_accept
+
+    # Round 2: Seller proposes 320 unit price, but demands 50 units (Total outlay = 16,000 > 12,600 budget)
+    d2 = agent.decide(
+        seller_counter=320.0,
+        seller_justification="We can offer ₹320 per unit if you increase your order volume to 50 units.",
+        seller_quantity=50,
+    )
+
+    # 1. Must NOT accept the 50-unit order despite lower unit price (320 < 340)
+    assert not d2.should_accept, (
+        f"Buyer agent erroneously accepted! Seller total outlay was ₹{320 * 50:,.2f} "
+        f"which exceeds buyer's budget cap ₹{config['max_budget']:,.2f}"
+    )
+
+    # 2. Buyer's counter must be within budget cap
+    assert d2.total_outlay <= config["max_budget"], (
+        f"Buyer counter total outlay ₹{d2.total_outlay} exceeds budget cap ₹{config['max_budget']}"
+    )
+
+    # 3. Buyer's counter quantity must not exceed storage capacity
+    assert d2.offer_quantity <= config["max_quantity"], (
+        f"Buyer counter quantity {d2.offer_quantity} exceeds max quantity {config['max_quantity']}"
+    )
+    assert d2.offer_quantity >= config["quantity"] * 0.8
+

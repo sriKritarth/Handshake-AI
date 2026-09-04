@@ -242,6 +242,7 @@ def build_user_prompt(
             f"- Anchor high: counter near list price (₹{list_price}) or pre-approved volume tier price (₹{round(tier_price)}).\n"
             "- Justify your price with premium product quality, manufacturer warranty, and priority batch handling.\n"
             "- Boulware tactic: Do not concede heavily in the opening round (maintain firm anchor).\n"
+            "- NEVER accept immediately on round 1 (should_accept must be false; always counter to probe buyer's reservation price).\n"
             "- Keep response to 2-3 natural sentences without leaking private stock or cost info."
         )
 

@@ -97,13 +97,20 @@ def _session_record_to_response(
             if latest_seller is not None and latest_buyer is not None:
                 break
 
+    qty = record.quantity or 1
+    if offer_events:
+        for ev in reversed(offer_events):
+            if ev.get("quantity") and int(ev["quantity"]) > 0:
+                qty = int(ev["quantity"])
+                break
+
     checkout_url = f"/api/v1/checkout/{record.id}" if record.status == "AGREED" else None
     rzp_short_url = razorpay_order.get("short_url") if razorpay_order else None
     amount = None
     amount_paise = None
     currency = None
-    if record.status == "AGREED" and record.final_agreed_price and record.quantity:
-        amount = float(record.final_agreed_price * record.quantity)
+    if record.status == "AGREED" and record.final_agreed_price and qty:
+        amount = float(record.final_agreed_price * qty)
         amount_paise = int(round(amount * 100))
         currency = "INR"
 
@@ -111,7 +118,7 @@ def _session_record_to_response(
         session_id=record.id,
         status=record.status,
         current_round=record.current_round,
-        quantity=record.quantity or None,
+        quantity=qty,
         sku_code=sku_code or record.sku_id,
         latest_seller_price=latest_seller,
         latest_buyer_price=latest_buyer,
@@ -518,7 +525,16 @@ async def checkout_page(
 
     sku = service.repo.get_catalog_sku_by_code(session.sku_id) or {}
     unit_price = float(session.final_agreed_price or 0.0)
+
+    # Robust negotiated quantity extraction
     qty = int(session.quantity or 1)
+    offer_events = service.repo.get_offer_events(session_id)
+    if offer_events:
+        for ev in reversed(offer_events):
+            if ev.get("quantity") and int(ev["quantity"]) > 0:
+                qty = int(ev["quantity"])
+                break
+
     amount = float(unit_price * qty)
     amount_paise = int(round(amount * 100))
     key_id = os.getenv("RAZORPAY_KEY_ID", "rzp_test_placeholder")

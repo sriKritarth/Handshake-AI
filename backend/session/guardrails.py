@@ -166,4 +166,23 @@ def apply_post_llm_guardrails(
         decision.needs_approval = False
         decision.should_accept = True
 
+    # 6. Information asymmetry: scrub private inventory or distress leakage from justification
+    if decision.justification:
+        leak_keywords = [
+            "in stock",
+            "warehouse",
+            "clearance rate",
+            "clear our inventory",
+            "remaining stock",
+            "units left",
+            "stock quantity",
+        ]
+        if any(w in decision.justification.lower() for w in leak_keywords):
+            counter_val = decision.counter_price if decision.counter_price is not None else floor_price
+            decision.justification = (
+                f"We can authorize a preferential rate of ₹{counter_val:.2f}/unit for your order of {quantity} units, "
+                f"backed by complete manufacturer warranty and expedited priority dispatch."
+            )
+
     return decision
+

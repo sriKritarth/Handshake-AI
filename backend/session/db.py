@@ -235,6 +235,10 @@ class InMemorySessionRepository(BaseSessionRepository):
 
 
 
+# In-memory shared cache for session quantities (bridges missing quantity column in Supabase negotiation_sessions table)
+_SESSION_QUANTITIES_CACHE: Dict[str, int] = {}
+
+
 class SupabaseSessionRepository(BaseSessionRepository):
     """Postgres repository accessing Supabase tables via postgrest / supabase-py client."""
 
@@ -286,6 +290,8 @@ class SupabaseSessionRepository(BaseSessionRepository):
         }
         res = self.client.table("negotiation_sessions").insert(payload).execute()
         if res.data:
+            if session.quantity:
+                _SESSION_QUANTITIES_CACHE[session.id] = int(session.quantity)
             log.debug("db_write", table="negotiation_sessions", session_id=session.id, operation="create")
             return session
         log.error("db_error", table="negotiation_sessions", operation="create", error="Insert returned no data")
@@ -306,12 +312,53 @@ class SupabaseSessionRepository(BaseSessionRepository):
         if status == "IN_PROGRESS" and exp and row.get("current_round", 0) >= 5:
             status = "FINAL_OFFER"
 
+        # Resolve quantity accurately:
+        # 1. Hot cache
+        qty = _SESSION_QUANTITIES_CACHE.get(session_id)
+        # 2. Latest offer_events record for this session
+        if qty is None:
+            try:
+                ev_res = (
+                    self.client.table("offer_events")
+                    .select("quantity")
+                    .eq("session_id", session_id)
+                    .order("created_at", desc=True)
+                    .limit(1)
+                    .execute()
+                )
+                if ev_res.data and ev_res.data[0].get("quantity"):
+                    qty = int(ev_res.data[0]["quantity"])
+                    _SESSION_QUANTITIES_CACHE[session_id] = qty
+            except Exception:
+                pass
+        # 3. Audit log snapshot_data (e.g. from SESSION_CREATED)
+        if qty is None:
+            try:
+                audit_res = (
+                    self.client.table("audit_logs")
+                    .select("snapshot_data")
+                    .eq("session_id", session_id)
+                    .order("logged_at", desc=False)
+                    .limit(1)
+                    .execute()
+                )
+                if audit_res.data:
+                    snap = audit_res.data[0].get("snapshot_data") or {}
+                    if snap.get("quantity"):
+                        qty = int(snap["quantity"])
+                        _SESSION_QUANTITIES_CACHE[session_id] = qty
+            except Exception:
+                pass
+        # 4. Fallback to row or 1
+        if qty is None:
+            qty = int(row.get("quantity") or 1)
+
         return SessionRecord(
             id=row["id"],
             sku_id=row["sku_id"],
             buyer_id=row["buyer_id"],
             channel=row.get("channel", "CHAT"),
-            quantity=row.get("quantity", 1),
+            quantity=qty,
             status=status,
             current_round=row["current_round"],
             final_agreed_price=row.get("final_agreed_price"),
@@ -328,6 +375,8 @@ class SupabaseSessionRepository(BaseSessionRepository):
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         self.client.table("negotiation_sessions").update(payload).eq("id", session.id).execute()
+        if session.quantity:
+            _SESSION_QUANTITIES_CACHE[session.id] = int(session.quantity)
         log.debug("db_write", table="negotiation_sessions", session_id=session.id, operation="update")
         return session
 
@@ -347,6 +396,8 @@ class SupabaseSessionRepository(BaseSessionRepository):
             "public_justification": event.public_justification or "",
         }
         self.client.table("offer_events").insert(payload).execute()
+        if event.quantity:
+            _SESSION_QUANTITIES_CACHE[event.session_id] = int(event.quantity)
         log.debug("db_write", table="offer_events", session_id=event.session_id, operation="insert", sender=event.sender)
         return event
 

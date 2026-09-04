@@ -11,5 +11,7 @@ supabase
 razorpay
 slowapi
 structlog
+python-statemachine
 logging
 streamlit
+

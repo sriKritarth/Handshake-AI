@@ -222,6 +222,15 @@ class NegotiationSessionService:
                     event_id=None,
                 )
 
+        # Ensure session quantity reflects negotiated volume if offer events exist
+        if session.quantity <= 1:
+            events = self.repo.get_offer_events(session_id)
+            if events:
+                for ev in reversed(events):
+                    if ev.get("quantity") and int(ev["quantity"]) > 0:
+                        session.quantity = int(ev["quantity"])
+                        break
+
         return session
 
     def handle_buyer_move(self, session_id: str, move: BuyerMove) :
@@ -495,19 +504,20 @@ class NegotiationSessionService:
         safety_stock_buffer = int(policy.get("safety_stock_buffer", sku.get("safety_stock_buffer", 50)))
         safe_stock_limit = stock_qty - safety_stock_buffer
 
-        if not decision.should_accept:
-            if req_qty > safe_stock_limit:
-                # Insufficient stock or leaves less than reserve buffer (50 units) -> ESCALATE
-                decision.needs_approval = True
-                decision.justification = (
-                    "Less inventory stocks left. Your requested order volume has been escalated for executive merchant review to verify allocation."
-                )
-                decision.internal_reasoning = (
-                    f"Requested quantity ({req_qty}) exceeds safe inventory threshold "
-                    f"({stock_qty} available stock vs {safety_stock_buffer} safety buffer, limit: {safe_stock_limit}). "
-                    f"Escalated for merchant inventory allocation review."
-                )
-            else:
+        if req_qty > safe_stock_limit:
+            # Insufficient stock or leaves less than reserve buffer (50 units) -> ESCALATE
+            decision.should_accept = False
+            decision.needs_approval = True
+            decision.justification = (
+                "Less inventory stocks left. Your requested order volume has been escalated for executive merchant review to verify allocation."
+            )
+            decision.internal_reasoning = (
+                f"Requested quantity ({req_qty}) exceeds safe inventory threshold "
+                f"({stock_qty} available stock vs {safety_stock_buffer} safety buffer, limit: {safe_stock_limit}). "
+                f"Escalated for merchant inventory allocation review."
+            )
+        else:
+            if not decision.should_accept:
                 # Safe inventory (buyer_quantity <= stock_quantity - 50) -> propose counter-offer without disclosing stock quantity
                 leaks_stock = any(w in decision.justification.lower() for w in ["in stock", "warehouse", "clearance rate", "clear our inventory", "remaining stock"])
                 if leaks_stock:

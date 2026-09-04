@@ -6,6 +6,12 @@ __pycache__
 /tests/test_benchmark.py
 /tests/conftest.py
 .pytest_cache/
+run_modular_tests.py
+test_execution_results.txt
+scripts/
+B2B_Negotiation_User_Testing_Guide_and_Rubrics.docx
+
+
 
 
 
