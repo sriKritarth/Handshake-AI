@@ -29,13 +29,16 @@ class MarginFloorRule(PricingRule):
 
     def evaluate(self, offer: Offer, policy: PricingPolicy) -> RuleResult:
         min_price = policy.cost_price * (1.0 + policy.margin_floor_pct / 100.0)
+        buyer_orig = getattr(offer, "original_proposed_price", None)
+        orig_price = buyer_orig if buyer_orig is not None else offer.proposed_price
 
-        if offer.proposed_price < min_price:
+        if orig_price < min_price or offer.proposed_price < min_price:
+            adjusted = max(offer.proposed_price, round(min_price, 2))
             return RuleResult(
                 passed=False,
                 rule_name="margin_floor",
                 original_price=offer.proposed_price,
-                adjusted_price=round(min_price, 2),
+                adjusted_price=adjusted,
                 reason="below_margin_floor",
             )
 

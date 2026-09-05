@@ -161,9 +161,15 @@ class GuardrailEngine:
         requires_merchant_approval: bool = False
         is_round_limit_final: bool = False
 
+        orig_proposed = offer.original_proposed_price if offer.original_proposed_price is not None else offer.proposed_price
         for rule in self._rules:
-            # Build a view of the offer with the waterfall-adjusted price
-            waterfall_offer = offer.model_copy(update={"proposed_price": current_price})
+            # Build a view of the offer with the waterfall-adjusted price while preserving original proposed price
+            waterfall_offer = offer.model_copy(
+                update={
+                    "proposed_price": current_price,
+                    "original_proposed_price": orig_proposed,
+                }
+            )
 
             result = rule.evaluate(waterfall_offer, policy)
             rule_results.append(result)

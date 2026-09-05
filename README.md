@@ -580,5 +580,5 @@ The behavioral, economic, and security architecture of Handshake AI is grounded 
 ## 📄 License & Contributors
 
 - **Repository**: [https://github.com/sriKritarth/Handshake-AI](https://github.com/sriKritarth/Handshake-AI)
-- **Author**: Sri Kritarth & Team Handshake AI
+- **Author**: Kritarth Srivastava
 - **License**: MIT License. Open source for hackathons, research, and enterprise autonomous commerce evaluations.

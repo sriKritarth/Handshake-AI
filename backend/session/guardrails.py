@@ -82,6 +82,7 @@ def evaluate_buyer_guardrails(
     offer_obj = Offer(
         sku=policy_obj.sku,
         proposed_price=proposed,
+        original_proposed_price=proposed,
         list_price=list_p,
         quantity=buyer_move.quantity,
         round_number=current_round,

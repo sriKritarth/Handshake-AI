@@ -47,6 +47,10 @@ class Offer(BaseModel):
         default_factory=list,
         description="Other SKUs purchased together (enables bundle pricing logic).",
     )
+    original_proposed_price: Optional[float] = Field(
+        default=None,
+        description="Original un-clamped proposed price from the buyer before waterfall clamping.",
+    )
 
 
 # ---------------------------------------------------------------------------

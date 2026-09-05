@@ -280,19 +280,78 @@ def build_user_prompt(
             "4. Natural Language: No math equations or gap percentages in the buyer message. Keep it polite, commercial, and firm."
         )
 
-    # Inventory safety reserve directive:
-    # If buyer requested quantity exceeds safe stock limit (stock - 50 units buffer), ESCALATE
+    # -----------------------------------------------------------------------
+    # Harvard Give-Get Defense Directive (arXiv:2602.06008, Harvard PON)
+    # Triggered when buyer offers price < floor_price and quantity < max volume tier
+    # -----------------------------------------------------------------------
+    qty_tiers = pricing_policy.get("qty_tier_discounts", [])
+    max_tier_qty = 50
+    for t in qty_tiers:
+        mq = t.get("max_qty") or t.get("min_qty", 1)
+        if mq > max_tier_qty:
+            max_tier_qty = mq
+
+    is_lowball = (
+        safe_offered > 0
+        and safe_offered < floor_price
+        and quantity < max_tier_qty
+        and template_name not in ("BUYER_ACCEPTS", "MERCHANT_COUNTER_RESUME")
+    )
+
+    if is_lowball:
+        past_lowballs = 0
+        for ev in offer_history:
+            s = str(ev.get("sender", "")).lower()
+            if s in ("buyer", "buyer_move"):
+                p = float(ev.get("proposed_price", 0.0))
+                q = int(ev.get("quantity", quantity))
+                if 0 < p < floor_price and q < max_tier_qty:
+                    past_lowballs += 1
+        lowball_round = past_lowballs + 1
+
+        upsell_target_qty = max_tier_qty
+        for t in qty_tiers:
+            if t.get("min_qty", 1) > quantity:
+                upsell_target_qty = t.get("min_qty", 1)
+                break
+
+        prompt_text += (
+            f"\n\nCRITICAL HARVARD GIVE-GET DEFENSE DIRECTIVE (Below-Floor Lowball Attack Detected):\n"
+            f"- Pre-LLM Guardrail Audit: Flags is_rule_passed=False, violated_rules=['floor_price', 'margin_floor'].\n"
+            f"- Buyer offered ₹{safe_offered} (BELOW floor ₹{floor_price} and margin floor ₹{margin_floor}) for {quantity} units (below wholesale volume tier {max_tier_qty}).\n"
+            f"- Lowball Negotiation Round: {min(lowball_round, 2)} of 2 permitted rounds.\n"
+            f"- HARVARD GIVE-GET BARGAINING PROTOCOL:\n"
+            f"  1. REFUSE TO CONCEDE BELOW MARGIN FLOOR: You must NEVER accept (should_accept=false). You are strictly prohibited from conceding below the margin floor (₹{margin_floor:.2f}).\n"
+            f"  2. PROPOSE A FIRM VALUE-ANCHORED COUNTER: In counter_price, propose a counter near list price or approved tier price (e.g. ₹{round(tier_price)}).\n"
+            f"  3. GIVE-GET RECIPROCITY & VOLUME UPSELL: If the buyer wants lower unit pricing, they must GIVE volume to GET a discount. Propose a volume upsell in counter_quantity (e.g. {upsell_target_qty} units) to qualify for wholesale batch savings.\n"
+            f"  4. VALUE FRAMING: Highlight premium product craftsmanship, heavy-duty hardware/materials, QA inspection, and priority dispatch. In buyer justification, state: 'We cannot authorize pricing below our production threshold for {quantity} units. However, if you can commit to our wholesale volume tier of {upsell_target_qty} units, we can unlock a preferential rate.'\n"
+            f"  5. 2-ROUND LIMIT AWARENESS:\n"
+            f"     - Round 1: Hold firm, counter high, demand batch volume trade-off.\n"
+            f"     - Round 2: Shrink concession (Boulware decay), hold firmly at or above margin floor. Make clear this is the firm commercial limit for this order size.\n"
+            f"     - You are permitted to negotiate for at most 2 rounds under this lowball condition."
+        )
+
+    # -----------------------------------------------------------------------
+    # Inventory safety reserve directive (PrefBench & Supply Chain Literature):
+    # If buyer requested quantity exceeds safe stock limit, ESCALATE.
+    # Dynamically scales buffer for low-stock SKUs so standard orders don't prematurely lock out.
+    # -----------------------------------------------------------------------
     safety_buffer = int(pricing_policy.get("safety_stock_buffer", catalog_sku.get("safety_stock_buffer", 50)))
-    safe_stock_limit = stock - safety_buffer
+    if stock <= safety_buffer:
+        effective_buffer = max(1, int(stock * 0.2))
+    else:
+        effective_buffer = safety_buffer
+    safe_stock_limit = stock - effective_buffer
+
     if quantity > safe_stock_limit and template_name != "BUYER_ACCEPTS":
         prompt_text += (
             f"\n\nCRITICAL INVENTORY ESCALATION DIRECTIVE (PrefBench & Supply Chain Literature):\n"
-            f"- Buyer requested {quantity} units, but warehouse inventory has {stock} units available (requiring a safety reserve buffer of {safety_buffer} units).\n"
-            f"- Because buyer_quantity ({quantity}) > stock_quantity ({stock}) - {safety_buffer}, you CANNOT auto-commit this inventory.\n"
+            f"- Buyer requested {quantity} units, but warehouse inventory has {stock} units available (requiring a safety reserve buffer of {effective_buffer} units).\n"
+            f"- Because buyer_quantity ({quantity}) > stock_quantity ({stock}) - {effective_buffer}, you CANNOT auto-commit this inventory.\n"
             f"- You MUST ESCALATE: Set needs_approval=true and should_accept=false.\n"
             f"- In justification (buyer-facing), state: 'Less inventory stocks left. Your requested order volume has been escalated for executive merchant review to verify warehouse allocation.'\n"
             f"- STRICT INFORMATION ASYMMETRY: DO NOT disclose the exact warehouse stock count number to the buyer.\n"
-            f"- In internal_reasoning (merchant knowledge base), record: 'Requested {quantity} units exceeds safe inventory limit ({safe_stock_limit} units, {stock} stock vs {safety_buffer} safety buffer). Escalated to merchant for allocation approval.'"
+            f"- In internal_reasoning (merchant knowledge base), record: 'Requested {quantity} units exceeds safe inventory limit ({safe_stock_limit} units, {stock} stock vs {effective_buffer} safety buffer). Escalated to merchant for allocation approval.'"
         )
 
     return prompt_text

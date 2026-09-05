@@ -237,6 +237,8 @@ class InMemorySessionRepository(BaseSessionRepository):
 
 # In-memory shared cache for session quantities (bridges missing quantity column in Supabase negotiation_sessions table)
 _SESSION_QUANTITIES_CACHE: Dict[str, int] = {}
+# In-memory shared cache for pending approval prices (bridges missing column in Supabase negotiation_sessions table)
+_SESSION_PENDING_PRICES_CACHE: Dict[str, float] = {}
 
 
 class SupabaseSessionRepository(BaseSessionRepository):
@@ -353,6 +355,41 @@ class SupabaseSessionRepository(BaseSessionRepository):
         if qty is None:
             qty = int(row.get("quantity") or 1)
 
+        # Resolve pending_approval_price:
+        pending_price = _SESSION_PENDING_PRICES_CACHE.get(session_id)
+        if pending_price is None:
+            try:
+                appr_res = (
+                    self.client.table("merchant_approvals")
+                    .select("requested_price")
+                    .eq("session_id", session_id)
+                    .order("created_at", desc=True)
+                    .limit(1)
+                    .execute()
+                )
+                if appr_res.data and appr_res.data[0].get("requested_price") is not None:
+                    pending_price = float(appr_res.data[0]["requested_price"])
+                    _SESSION_PENDING_PRICES_CACHE[session_id] = pending_price
+            except Exception:
+                pass
+        if pending_price is None:
+            try:
+                ev_res = (
+                    self.client.table("offer_events")
+                    .select("proposed_price, guardrail_clamped_price")
+                    .eq("session_id", session_id)
+                    .order("round_number", desc=True)
+                    .limit(1)
+                    .execute()
+                )
+                if ev_res.data:
+                    p = ev_res.data[0].get("proposed_price") or ev_res.data[0].get("guardrail_clamped_price")
+                    if p and float(p) > 0:
+                        pending_price = float(p)
+                        _SESSION_PENDING_PRICES_CACHE[session_id] = pending_price
+            except Exception:
+                pass
+
         return SessionRecord(
             id=row["id"],
             sku_id=row["sku_id"],
@@ -362,6 +399,7 @@ class SupabaseSessionRepository(BaseSessionRepository):
             status=status,
             current_round=row["current_round"],
             final_agreed_price=row.get("final_agreed_price"),
+            pending_approval_price=pending_price,
             expires_at=exp,
         )
 
@@ -377,6 +415,8 @@ class SupabaseSessionRepository(BaseSessionRepository):
         self.client.table("negotiation_sessions").update(payload).eq("id", session.id).execute()
         if session.quantity:
             _SESSION_QUANTITIES_CACHE[session.id] = int(session.quantity)
+        if session.pending_approval_price is not None:
+            _SESSION_PENDING_PRICES_CACHE[session.id] = float(session.pending_approval_price)
         log.debug("db_write", table="negotiation_sessions", session_id=session.id, operation="update")
         return session
 
@@ -408,10 +448,15 @@ class SupabaseSessionRepository(BaseSessionRepository):
     def record_merchant_approval(
         self, session_id: str, requested_price: float, status: str = "PENDING", notes: Optional[str] = None
     ) -> Dict[str, Any]:
+        if requested_price is not None:
+            _SESSION_PENDING_PRICES_CACHE[session_id] = float(requested_price)
+        db_status = status.upper() if status else "PENDING"
+        if db_status not in ("PENDING", "APPROVED", "REJECTED"):
+            db_status = "PENDING"
         payload = {
             "session_id": session_id,
             "requested_price": requested_price,
-            "status": status,
+            "status": db_status,
             "merchant_notes": notes,
         }
         res = self.client.table("merchant_approvals").insert(payload).execute()
@@ -420,8 +465,12 @@ class SupabaseSessionRepository(BaseSessionRepository):
     def update_merchant_approval(
         self, session_id: str, status: str, notes: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
+        db_status = status.upper() if status else "REJECTED"
+        if db_status not in ("PENDING", "APPROVED", "REJECTED"):
+            # Supabase check constraint merchant_approvals_status_check permits ('PENDING', 'APPROVED', 'REJECTED')
+            db_status = "REJECTED"
         payload = {
-            "status": status,
+            "status": db_status,
             "merchant_notes": notes,
             "responded_at": datetime.now(timezone.utc).isoformat(),
         }
