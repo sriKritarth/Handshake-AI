@@ -20,8 +20,15 @@ _root_dir = _backend_dir.parent
 
 load_dotenv(_root_dir / ".env", override=True)
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
+
 if str(_backend_dir) not in sys.path:
     sys.path.insert(0, str(_backend_dir))
+if str(_root_dir) not in sys.path:
+    sys.path.insert(0, str(_root_dir))
 
 # ---------------------------------------------------------------------------
 # Structured logging — configure ONCE before anything else imports a logger

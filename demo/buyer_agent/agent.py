@@ -123,6 +123,7 @@ class BuyerAgent:
                 {"role": "user", "content": user_prompt},
             ],
             temperature=0.3,
+            max_completion_tokens=998,
         )
 
         # Ensure default offer_quantity if missing or non-positive

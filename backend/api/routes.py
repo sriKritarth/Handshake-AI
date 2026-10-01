@@ -1,12 +1,11 @@
 """All API route definitions for the B2B Negotiation Agent API (Phase 7)."""
-from __future__ import annotations
 
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -161,8 +160,8 @@ def _domain_session_response_to_api(resp) -> NegotiationResponse:
 
 @router.post("/sessions", response_model=SessionResponse, status_code=201)
 async def create_session(
-    req: CreateSessionRequest,
     request: Request,
+    req: CreateSessionRequest = Body(...),
 ):
     """Create a new negotiation session. Requires scope: admin:create_session"""
     client: AuthenticatedClient = request.state.auth_client
@@ -219,8 +218,8 @@ async def get_session(
 @limiter.limit("10/minute")
 async def buyer_move(
     session_id: str,
-    req: BuyerMoveRequest,
     request: Request,
+    req: BuyerMoveRequest = Body(...),
 ):
     """Submit a buyer offer or counter. Returns seller response. Requires scope: buyer:negotiate"""
     client: AuthenticatedClient = request.state.auth_client
@@ -317,8 +316,8 @@ async def decline_offer(
 @router.post("/sessions/{session_id}/merchant-decision", response_model=NegotiationResponse)
 async def merchant_decision(
     session_id: str,
-    req: MerchantDecisionRequest,
     request: Request,
+    req: MerchantDecisionRequest = Body(...),
 ):
     """Merchant approves, rejects, or counter-offers a pending approval.
     Requires one of: merchant:approve | merchant:reject | merchant:counter"""
@@ -490,6 +489,175 @@ async def verify_session(
         total_entries=len(entries),
         entries=entries,
     )
+
+
+# ---------------------------------------------------------------------------
+# Autonomous Agent-to-Agent (A2A) Negotiation Routes
+# ---------------------------------------------------------------------------
+
+class A2AStepRequest(BaseModel):
+    target_price: Optional[float] = None
+    walk_away_price: Optional[float] = None
+    max_budget: Optional[float] = None
+    max_rounds: Optional[int] = 5
+
+
+@router.post("/sessions/{session_id}/a2a/step")
+async def a2a_step(
+    session_id: str,
+    request: Request,
+    req: A2AStepRequest = Body(default_factory=A2AStepRequest),
+):
+    """Run a single autonomous A2A round against the Seller Engine. Requires scope: buyer:negotiate"""
+    client: AuthenticatedClient = request.state.auth_client
+    client.require_scope("buyer:negotiate")
+    service = request.state.service
+
+    # 1. Fetch current session
+    try:
+        session = service.get_session(session_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if session.status in ("AGREED", "REJECTED", "EXPIRED", "WALKED_AWAY", "DECLINED"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Session is already in terminal state '{session.status}'",
+        )
+
+    sku = service.repo.get_catalog_sku_by_code(session.sku_id) or {}
+    mrp = float(sku.get("base_price") or sku.get("list_price") or 1000.0)
+    qty = int(session.quantity or 1)
+
+    # 2. Derive Buyer Config with Dual-Metric Outlay Math
+    target = float(req.target_price or round(mrp * 0.75, 2))
+    walkaway = float(req.walk_away_price or round(mrp * 0.88, 2))
+    budget = float(req.max_budget or round(qty * walkaway, 2))
+    max_rounds = int(req.max_rounds or 5)
+
+    buyer_config = {
+        "product_name": sku.get("name", "Wholesale Item"),
+        "sku_code": sku.get("sku_code", session.sku_id),
+        "quantity": qty,
+        "list_price": mrp,
+        "target_price": target,
+        "walk_away_price": walkaway,
+        "opening_offer": round(mrp * 0.65, 2),
+        "max_rounds": max_rounds,
+        "max_budget": budget,
+        "max_quantity": int(qty * 1.25),
+    }
+
+    from demo.buyer_agent.agent import BuyerAgent
+    buyer = BuyerAgent(buyer_config)
+
+    # 3. Rebuild history from prior offer events
+    events = service.repo.get_offer_events(session_id) or []
+    last_seller_price = None
+    last_seller_qty = None
+    last_seller_just = None
+
+    rounds_data: Dict[int, Dict[str, Any]] = {}
+    for ev in events:
+        r_num = int(ev.get("round_number") or 1)
+        if r_num not in rounds_data:
+            rounds_data[r_num] = {}
+        sender = str(ev.get("sender", "")).upper()
+        if sender == "BUYER":
+            rounds_data[r_num]["buyer"] = ev
+        elif sender in ("SELLER_AI", "SELLER_GUARDRAIL", "MERCHANT"):
+            rounds_data[r_num]["seller"] = ev
+            last_seller_price = float(ev.get("proposed_price") or ev.get("guardrail_clamped_price") or 0.0)
+            last_seller_qty = int(ev.get("quantity") or qty)
+            last_seller_just = ev.get("public_justification") or ev.get("rule_reason")
+
+    for r_num in sorted(rounds_data.keys()):
+        rd = rounds_data[r_num]
+        if "buyer" in rd and "seller" in rd:
+            b_ev = rd["buyer"]
+            s_ev = rd["seller"]
+            buyer.record_round(
+                buyer_offer=float(b_ev.get("proposed_price") or 0.0),
+                buyer_message=b_ev.get("public_justification") or "",
+                seller_counter=float(s_ev.get("proposed_price") or 0.0),
+                seller_justification=s_ev.get("public_justification") or "",
+                buyer_quantity=int(b_ev.get("quantity") or qty),
+                seller_quantity=int(s_ev.get("quantity") or qty),
+            )
+
+    buyer.current_round = session.current_round
+
+    # 4. Generate Buyer LLM Decision
+    decision = buyer.decide(last_seller_price, last_seller_just, seller_quantity=last_seller_qty)
+
+    # 5. Execute move on seller domain engine
+    action = "COUNTER"
+    if decision.should_walk_away:
+        action = "WALK_AWAY"
+        res = service.decline_offer(session_id, buyer_id=session.buyer_id)
+    elif decision.should_accept and last_seller_price is not None:
+        action = "ACCEPT"
+        res = service.accept_offer(session_id, buyer_id=session.buyer_id)
+    else:
+        b_msg = decision.message[:497] + "..." if len(decision.message) > 500 else decision.message
+        move = BuyerMove(
+            quantity=decision.offer_quantity or qty,
+            offered_price=decision.offer_price,
+            buyer_message=b_msg,
+            accept_last_offer=False,
+        )
+        res = service.handle_buyer_move(session_id, move)
+
+    seller_api = _domain_session_response_to_api(res)
+    return {
+        "session_id": session_id,
+        "round": res.current_round,
+        "status": res.status,
+        "buyer_decision": {
+            "action": action,
+            "offer_price": decision.offer_price,
+            "quantity": decision.offer_quantity or qty,
+            "total_outlay": decision.total_outlay,
+            "message": decision.message,
+            "internal_reasoning": decision.internal_reasoning,
+        },
+        "seller_response": seller_api,
+    }
+
+
+@router.post("/sessions/{session_id}/a2a/auto-run")
+async def a2a_auto_run(
+    session_id: str,
+    request: Request,
+    req: A2AStepRequest = Body(default_factory=A2AStepRequest),
+):
+    """Run full autonomous negotiation loop to completion. Requires scope: buyer:negotiate"""
+    client: AuthenticatedClient = request.state.auth_client
+    client.require_scope("buyer:negotiate")
+
+    transcript = []
+    max_rounds = int(req.max_rounds or 5)
+    final_step = None
+
+    for _ in range(max_rounds + 1):
+        step_result = await a2a_step(session_id, request, req)
+        transcript.append(step_result)
+        final_step = step_result
+        if step_result["status"] in ("AGREED", "PENDING_APPROVAL", "REJECTED", "EXPIRED", "WALKED_AWAY", "DECLINED"):
+            break
+
+    seller_api = final_step["seller_response"] if final_step else None
+    return {
+        "session_id": session_id,
+        "final_status": final_step["status"] if final_step else "UNKNOWN",
+        "total_rounds": len(transcript),
+        "transcript": transcript,
+        "final_agreed_price": getattr(seller_api, "final_agreed_price", None),
+        "amount": getattr(seller_api, "amount", None),
+        "amount_paise": getattr(seller_api, "amount_paise", None),
+        "checkout_url": getattr(seller_api, "checkout_url", None),
+        "razorpay_short_url": getattr(seller_api, "razorpay_short_url", None),
+    }
 
 
 # ---------------------------------------------------------------------------
