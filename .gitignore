@@ -10,8 +10,12 @@ run_modular_tests.py
 test_execution_results.txt
 scripts/
 B2B_Negotiation_User_Testing_Guide_and_Rubrics.docx
-frontend/
 express_gateway/node_modules/
+/GEMINI.md
+
+
+
+
 
 
 

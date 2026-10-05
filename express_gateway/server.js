@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require('cors')
 require("dotenv").config()
+const fileUpload = require("express-fileupload")
 
 const app = express()
 
@@ -13,10 +14,20 @@ app.use(express.json({
     }
 }));
 
+
 app.use(cors());
+
+
+app.use(fileUpload({                              
+    useTempFiles: true,
+    tempFileDir: "/tmp/"
+}));
 
 const dbConnection = require("./config/db")
 dbConnection;
+
+const {cloudConnect} = require("./config/cloudinary");
+cloudConnect();
 
 
 // mount the routes

@@ -246,10 +246,12 @@
       currency: "{{ currency }}",
       name: "Handshake AI",
       description: "{{ product_name }} ({{ quantity }} units)",
+      notes: {
+        session_id: "{{ session_id }}" // <--- Sent to Razorpay and returned in the webhook!
+      },
       handler: function (response) {
-        document.getElementById("checkout-view").style.display = "none";
-        document.getElementById("payment-success").style.display = "block";
-        document.getElementById("payment-id-val").innerText = response.razorpay_payment_id || "pay_demo_success";
+        // When done, simply redirect back to the session room
+        window.location.href = `http://localhost:5173/session/{{ session_id }}?paid=true`;
       },
       prefill: {
         name: "B2B Buyer",

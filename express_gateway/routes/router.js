@@ -16,8 +16,8 @@ const {a2aStep,a2aAutoRun} = require("../controllers/negotiation/a2a_negotiation
 const {getPendingsesssions , counterApprove} = require("../controllers/merchant-negotiation/negotiation");
 const { verifySessionAccess } = require("../middleware/b2b_middleware");
 const {getaudit ,replayChain , verifyChain} = require("../controllers/audit-chain/audit")
-const {checkout , chekout_webhook} = require("../controllers/payments/payments_update")
-
+const {checkout , checkout_webhook , cartCheckout} = require("../controllers/payments/payments_update")
+const {imageUpload} = require("../controllers/file-upload/cloudinary_upload")
 
 
 // Authentication & Profile Routes
@@ -55,5 +55,9 @@ router.get("/sessions/:session_id/verify" , authenticateToken , requireRole("buy
 
 // payments
 router.get("/checkout/:session_id" , authenticateToken , requireRole("buyer") , verifySessionAccess , checkout)
-router.post("/checkout/webhook"  ,  chekout_webhook)
+router.post("/checkout/cart", authenticateToken, requireRole("buyer"), cartCheckout);
+router.post("/checkout/webhook"  ,  checkout_webhook)
+
+// image upload
+router.post("/image_upload/:sku_code" , imageUpload);
 module.exports = router;

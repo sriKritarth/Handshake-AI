@@ -3,7 +3,7 @@ require('dotenv').config()
 
 exports.getAllCatalog = async function (req , res){
     try{
-        const {data , error} = await supabase.from('catalog_skus').select("sku_code , name , category , description , base_price").order("name" , {ascending : true})
+        const {data , error} = await supabase.from('catalog_skus').select("sku_code , name , category , description , base_price , Image_url").order("name" , {ascending : true})
         if (error) {
             return res.status(500).json({
                 success: false,
@@ -31,7 +31,7 @@ exports.getAllCatalog = async function (req , res){
 exports.getCatalogbysku = async function (req , res){
     try{
         const {sku_code} = req.params;
-        const {data , error} = await supabase.from('catalog_skus').select("sku_code , name , category , description , base_price").eq('sku_code' , sku_code).maybeSingle()
+        const {data , error} = await supabase.from('catalog_skus').select("sku_code , name , category , description , base_price , Image_url").eq('sku_code' , sku_code).maybeSingle()
 
         if (error) {
             return res.status(500).json({

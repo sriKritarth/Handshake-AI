@@ -1,0 +1,14 @@
+import React from "react";
+import { cn } from "@/utils/cn";
+
+export const Skeleton: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({
+  className,
+  ...props
+}) => {
+  return (
+    <div
+      className={cn("animate-pulseSoft rounded-lg bg-neutral-800/80", className)}
+      {...props}
+    />
+  );
+};

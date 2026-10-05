@@ -525,6 +525,12 @@ async def a2a_step(
             detail=f"Session is already in terminal state '{session.status}'",
         )
 
+    if session.status == "PENDING_APPROVAL":
+        raise HTTPException(
+            status_code=400,
+            detail="Session has been escalated and is awaiting review at the Merchant Desk.",
+        )
+
     sku = service.repo.get_catalog_sku_by_code(session.sku_id) or {}
     mrp = float(sku.get("base_price") or sku.get("list_price") or 1000.0)
     qty = int(session.quantity or 1)
