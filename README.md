@@ -8,13 +8,16 @@
 [![Razorpay](https://img.shields.io/badge/Payments-Razorpay%20Checkout%20%26%20Webhooks-02042B.svg?logo=razorpay)](https://razorpay.com/)
 [![Supabase](https://img.shields.io/badge/Database-PostgreSQL%20%2F%20Supabase-3ECF8E.svg?logo=supabase)](https://supabase.com/)
 
-> **Handshake AI** is an enterprise-grade autonomous B2B wholesale platform. It automates commercial procurement through bilateral AI agent negotiation, deterministic margin protection waterfalls, strict information asymmetry defense, cryptographic auditability, high-performance Cloudinary dynamic asset delivery, and instant Razorpay payment settlement.
+> **Handshake AI** is a production-grade, autonomous B2B commerce platform engineered for high-volume wholesale procurement. It replaces rigid static pricing and slow manual discount approval cycles with bilateral AI agent negotiation, deterministic margin protection waterfalls, cryptographic audit chains, high-performance dynamic asset delivery, and instant digital payment settlement.
 
 ---
 
 ## 📑 Table of Contents
 
-- [Platform Overview & Key Capabilities](#-platform-overview--key-capabilities)
+- [Executive Product Overview](#-executive-product-overview)
+  - [The Commercial Problem](#the-commercial-problem)
+  - [The Handshake AI Solution](#the-handshake-ai-solution)
+  - [Target Ecosystem & Value Drivers](#target-ecosystem--value-drivers)
 - [Enterprise 3-Tier Architecture](#-enterprise-3-tier-architecture)
 - [Core Architectural Pillars](#-core-architectural-pillars)
   - [1. Two-Phase Guardrail Waterfall](#1-two-phase-guardrail-waterfall)
@@ -24,42 +27,43 @@
   - [5. Competent Autonomous Buyer Agent (Outlay & Volume Math)](#5-competent-autonomous-buyer-agent-outlay--volume-math)
   - [6. High-Performance Cloudinary Dynamic Delivery Engine](#6-high-performance-cloudinary-dynamic-delivery-engine)
   - [7. Instant Payment Settlement & Webhook Verification](#7-instant-payment-settlement--webhook-verification)
-- [User Interfaces & Portal Surfaces](#-user-interfaces--portal-surfaces)
+- [Portals & User Workflows](#-portals--user-workflows)
   - [Wholesale Storefront & Catalog](#wholesale-storefront--catalog)
   - [Autonomous Negotiation Room](#autonomous-negotiation-room)
   - [Executive Merchant Review Desk](#executive-merchant-review-desk)
   - [Shopping Cart & Instant Direct Checkout](#shopping-cart--instant-direct-checkout)
 - [Repository Structure](#-repository-structure)
-- [Installation & Full-Stack Deployment](#-installation--full-stack-deployment)
-  - [Prerequisites](#prerequisites)
-  - [Environment Configuration](#environment-configuration)
-  - [1. Start FastAPI AI Engine (Port 8001)](#1-start-fastapi-ai-engine-port-8001)
-  - [2. Start Express API Gateway (Port 8000)](#2-start-express-api-gateway-port-8000)
-  - [3. Start React Frontend (Port 5173)](#3-start-react-frontend-port-5173)
+- [Production Deployment & Configuration](#-production-deployment--configuration)
+  - [Architecture Topology](#architecture-topology)
+  - [Environment Variables Specification](#environment-variables-specification)
+  - [Microservice Orchestration Guide](#microservice-orchestration-guide)
+  - [Health Probes & Readiness Checks](#health-probes--readiness-checks)
 - [API Gateway Reference](#-api-gateway-reference)
-- [Database Schema & Parity](#-database-schema--parity)
-- [Academic Grounding & Citations](#-academic-grounding--citations)
+- [Database Relational Integrity & Schema](#-database-relational-integrity--schema)
+- [Academic Grounding & Game-Theoretic Research](#-academic-grounding--game-theoretic-research)
 - [License & Authors](#-license--authors)
 
 ---
 
-## 🌟 Platform Overview & Key Capabilities
+## 🌟 Executive Product Overview
 
-Traditional B2B wholesale procurement suffers from severe commercial friction:
-* Static catalog pricing repels large-volume buyers seeking tiered economies of scale.
-* Manual discount authorization workflows take days, leaving prospective orders abandoned.
-* Naive LLM chatbots hallucinate below-cost prices, leak proprietary inventory numbers, and fold under aggressive buyer lowballing.
+### The Commercial Problem
+In enterprise B2B wholesale procurement, static price lists fail to reflect real market dynamics:
+1. **Lost Deal Velocity**: Enterprise buyers purchasing in volume expect tiered quantity discounts. Static storefront prices force them to initiate manual sales inquiries, extending lead-to-close times by days or weeks.
+2. **Margin Erosion**: Human sales teams frequently concede excessive ad-hoc discounts near end-of-quarter deadlines without mathematical verification of product gross margins.
+3. **Chatbot Hallucinations**: Standard generative AI chatbots lack economic boundaries; when prompted, they hallucinate below-cost rates, leak sensitive warehouse inventory levels, and accept absurd lowball offers.
 
-**Handshake AI** delivers an enterprise B2B platform engineered for real-world commerce:
+### The Handshake AI Solution
+**Handshake AI** bridges commercial flexibility with enterprise guardrails through an autonomous pair-negotiation engine:
+* **Bilateral Agent-to-Agent Bargaining**: Procurement buyer agents and merchant seller agents negotiate price and quantity in real time using Harvard "Give-Get" negotiation frameworks and game-theoretic concession patterns.
+* **Dual-Tier Mathematical Waterfalls**: Strict algorithmic boundaries clamp prices to guaranteed floor limits before and after any language model generates an offer.
+* **Information Asymmetry Quarantine**: Private seller parameters (unit cost price, floor margin, warehouse distress levels) remain segregated in internal merchant reasoning and are mathematically barred from outward buyer messages.
+* **Zero-Intervention Order Finalization**: Once mutual agreement is reached, an immutable order snapshot and Razorpay checkout session are automatically instantiated.
 
-1. **Bilateral Autonomous Agent Negotiation (A2A)**: AI Buyer and AI Seller agents negotiate wholesale rates using Harvard "Give-Get" principles and game-theoretic concession curves.
-2. **Deterministic Margin Protection Waterfall**: Hard mathematical rules enforce floor prices, minimum gross margin thresholds, and volume discount ceilings before and after any LLM generation.
-3. **Information Asymmetry Protection**: Private warehouse reserves, carrying costs, and distress signals remain quarantined in internal reasoning; outward client communication anchors commercial value.
-4. **Multi-Objective Procurement Math**: Buyer agents optimize total spend outlay ($P \times Q \le \text{Budget}$) alongside per-unit pricing, rejecting predatory volume upselling.
-5. **High-Performance Asset Optimization**: Dynamic Cloudinary transformations (`f_auto, q_auto, w_*`) paired with in-memory memoization caches deliver sub-50ms visual experiences.
-6. **Unified Dual-Portal UX**: Tailored interfaces for Wholesale Buyers (catalog, bargaining room, cart) and Enterprise Merchants (pending approval queue, counter-approvals, inventory tracking).
-7. **Tamper-Evident SHA-256 Ledger**: Every proposal, counter-move, and guardrail decision is sealed in a cryptographic hash chain verifiable at any moment.
-8. **End-to-End Settlement Rails**: Automatic transition from agreed terms directly to Razorpay Standard Checkout with server-side HMAC-SHA256 webhook reconciliation.
+### Target Ecosystem & Value Drivers
+* **B2B Distributors & Manufacturers**: Liquidate inventory lots and capture high-volume buyer orders automatically with 100% margin floor protection.
+* **Bulk Procurement Platforms**: Empower corporate purchasing agents to secure volume-tailored pricing without human telephone friction.
+* **Enterprise Marketplaces**: Provide dynamic counter-bargaining and automated escrow settlement as a native infrastructure primitive.
 
 ---
 
@@ -75,7 +79,7 @@ flowchart TB
         IMG_CACHE["Dynamic Image Engine<br/>(images.ts • f_auto, q_auto, w_*)"]
     end
 
-    subgraph GATEWAY["API Gateway Tier (Express 5.x • Port 8000)"]
+    subgraph GATEWAY["API Gateway Tier (Express 5.x Reverse Proxy)"]
         AUTH_MW["JWT Authentication & RBAC<br/>(auth.js • buyer/merchant roles)"]
         CATALOG_CTL["Catalog Controller<br/>(catalog.js • Supabase SQL)"]
         A2A_PROXY["A2A Negotiation Proxy<br/>(a2a_negotiation.js)"]
@@ -83,7 +87,7 @@ flowchart TB
         CLDN_CTL["Cloudinary Uploader<br/>(cloudinary_upload.js)"]
     end
 
-    subgraph ENGINE["AI Core & Domain Tier (FastAPI • Port 8001)"]
+    subgraph ENGINE["AI Core & Domain Tier (FastAPI Service)"]
         AUTH_KEY["Internal API Key Guard<br/>(X-API-Key: ADMIN_KEY)"]
         FSM["NegotiationFSM<br/>7-State Deterministic Lifecycle"]
         PRE_GUARD["Pre-LLM Guardrail Waterfall<br/>(6-Rule Mathematical Check)"]
@@ -95,7 +99,7 @@ flowchart TB
 
     subgraph DATA["Data & Persistence Tier"]
         SUPA[("Supabase PostgreSQL<br/>catalog_skus • pricing_policies<br/>negotiation_sessions • offer_events")]
-        CLDN[("Cloudinary Media CDN<br/>Optimized Dynamic Image Delivery")]
+        CLDN[("Cloudinary Media CDN<br/>Dynamic Transformed Assets")]
         RZP[("Razorpay Payment Gateway<br/>Orders, Payment Links & Webhooks")]
     end
 
@@ -131,7 +135,7 @@ flowchart TB
 
 ### 1. Two-Phase Guardrail Waterfall
 
-Handshake AI implements a **Two-Phase Guardrail Waterfall** ensuring mathematical safety both before and after LLM inference:
+Handshake AI enforces mathematical safety at two distinct boundaries during every negotiation turn:
 
 ```mermaid
 flowchart TD
@@ -159,9 +163,9 @@ flowchart TD
 ```
 
 - **6 Individual Rules**:
-  - `FloorPriceRule`: Absolute hard bottom boundary; zero unit discounts permitted below this threshold.
-  - `MarginFloorRule`: Cost plus minimum gross margin percentage ($Cost \times [1 + Margin\%]$); prices between floor and margin floor require executive merchant review.
-  - `MaxDiscountRule`: Caps cumulative discount percentage allowable off list price.
+  - `FloorPriceRule`: Absolute hard bottom boundary; zero unit discounts permitted below this threshold under any circumstance.
+  - `MarginFloorRule`: Cost plus minimum gross margin percentage (Cost × [1 + Margin%]); prices between floor and margin floor require executive merchant review.
+  - `MaxDiscountRule`: Caps cumulative discount percentage allowable off catalog list price.
   - `QuantityTierRule`: Enforces structured volume bracket pricing (e.g., 1–19 units: 0%, 20–49 units: 4%, 50–99 units: 8%).
   - `RoundLimitRule`: Enforces maximum round quota (default: 5 rounds) and triggers `FINAL_OFFER`.
   - `InventoryDiscretionRule`: Applies extra aging discounts for slow-moving warehouse inventory exceeding age thresholds.
@@ -170,19 +174,19 @@ flowchart TD
 
 ### 2. Strict Information Asymmetry & Warehouse Non-Disclosure
 
-In real-world B2B wholesale negotiations, disclosing warehouse stock levels or expressing urgency to "clear inventory" destroys seller surplus and triggers aggressive buyer lowballing.
+In enterprise wholesale, revealing remaining stock or urgency to "move inventory" destroys seller pricing power and invites lowballing.
 
 - **Research Grounding**:
   - **PrefBench (arXiv:2605.22855)**: In asymmetric bargaining, reservation thresholds and private inventory levels must remain hidden.
   - **Supply Chain Dynamic Bargaining (arXiv:2608.07538)**: Under Perfect Bayesian Equilibrium, private inventory constraints must be shielded; sellers offer fixed allocation lots rather than admitting stock scarcity.
-  - **Boulware Concession Pattern**: Price concessions diminish monotonically ($\Delta P_1 > \Delta P_2 > \Delta P_3$) to signal reservation boundaries without exposing formulas.
+  - **Boulware Concession Pattern**: Price concessions diminish monotonically (ΔP₁ > ΔP₂ > ΔP₃) to signal reservation boundaries without exposing formulas.
 - **Dual-Channel Messaging**:
   - **Customer-Facing (`justification`)**: Zero mention of warehouse counts, "in stock", or distress phrasing ("clearance rate"). Instead, frames offers as **immediate priority allocation batches** backed by manufacturer warranty, dedicated logistics, and expedited fulfillment.
   - **Merchant Confidential Base (`internal_reasoning`)**: Full transparency for the merchant, documenting gross margin percentage preserved, carrying cost savings, and inventory turnover acceleration.
 - **Automated Post-LLM Scrubbing**: In `backend/session/service.py` and `backend/session/guardrails.py`, regex filters detect and sanitize leaks (`"in stock"`, `"warehouse"`, `"clearance rate"`, `"remaining stock"`).
 - **Safety Reserve Buffer (`buyer_quantity <= stock_quantity - 50`)**:
-  - If fulfilling the order leaves $\ge 50$ units, bargaining proceeds normally.
-  - If fulfilling leaves $< 50$ units (or exceeds total inventory), the session automatically halts, transitions to `PENDING_APPROVAL`, and presents client-friendly messaging.
+  - If fulfilling the order leaves ≥ 50 units, bargaining proceeds normally.
+  - If fulfilling leaves < 50 units (or exceeds total inventory), the session automatically halts, transitions to `PENDING_APPROVAL`, and presents client-friendly messaging.
 
 ---
 
@@ -221,31 +225,37 @@ stateDiagram-v2
 
 Every state transition, buyer proposal, seller counter-move, and merchant intervention is cryptographically chained using SHA-256 hash pointers ([`backend/session/audit.py`](file:///f:/razorpay_hackathon/backend/session/audit.py)):
 
-$$H_i = \text{SHA-256}\left( H_{i-1} \,\|\, \text{session\_id} \,\|\, \text{event\_id} \,\|\, \text{canonical\_json}(\text{snapshot\_data}) \,\|\, \text{logged\_at} \right)$$
+```text
+H[i] = SHA-256( H[i-1] || session_id || event_id || canonical_json(snapshot_data) || logged_at )
+```
 
-- **Genesis Seed**: $H_0 = \text{"GENESIS"}$.
-- **Tamper Detection**: If any database entry or offer value is modified post-negotiation, recomputing the hash chain detects the modification.
-- **Verification Endpoint**: `GET /api/v1/sessions/{session_id}/verify` provides full mathematical validation with expected vs. recorded hashes for audit review.
-- **Timeline Endpoint**: `GET /api/v1/sessions/{session_id}/replay` provides a chronological event log of the negotiation.
+- **Genesis Seed**: `H[0] = "GENESIS"`
+- **Tamper Detection**: If any database record or price is altered post-negotiation, recomputing the hash chain detects the modification.
+- **Verification Proof**: `GET /api/v1/sessions/{session_id}/verify` returns mathematical validation with expected vs. recorded hashes for enterprise compliance audits.
+- **Timeline Endpoint**: `GET /api/v1/sessions/{session_id}/replay` provides a chronological event log of the entire negotiation history.
 
 ---
 
 ### 5. Competent Autonomous Buyer Agent (Outlay & Volume Math)
 
-In B2B wholesale commerce, buyers do not simply optimize unit prices—they manage **Working Capital, Total Spend Outlay, and Inventory Absorption Capacity**.
+In B2B wholesale commerce, buyers manage **Working Capital, Total Spend Outlay, and Inventory Absorption Capacity** rather than mere per-unit rates.
 
 #### Dual-Metric Mathematical Evaluation
 The autonomous `BuyerAgent` ([`demo/buyer_agent/agent.py`](file:///f:/razorpay_hackathon/demo/buyer_agent/agent.py)) enforces a multi-objective utility boundary:
 
-$$\text{Acceptance Criterion: } (P_{\text{seller}} \le P_{\text{walkaway}}) \land (P_{\text{seller}} \times Q_{\text{seller}} \le B_{\text{max}}) \land (Q_{\text{seller}} \le Q_{\text{max}})$$
+```text
+Acceptance Condition: (P_seller ≤ P_walkaway) ∧ (P_seller × Q_seller ≤ B_max) ∧ (Q_seller ≤ Q_max)
+```
 
 #### Tactical Counter-Logrolling
-When the seller offers a low unit rate but demands an inflated batch volume:
+When the seller offers a discounted unit rate but demands an inflated batch volume:
 1. Buyer agent rejects immediate acceptance (`should_accept = False`).
 2. Buyer calculates the maximum affordable batch size at the seller's discounted unit rate:
-   $$Q_{\text{counter}} = \min\left(Q_{\text{max}}, \left\lfloor \frac{B_{\text{max}}}{P_{\text{seller}}} \right\rfloor\right)$$
+   ```text
+   Q_counter = min( Q_max, floor( B_max / P_seller ) )
+   ```
 3. Buyer counters with a budget-capped volume commitment.
-4. **Post-LLM Safety Guardrail**: Overrides acceptance if spend exceeds $B_{\text{max}}$.
+4. **Post-LLM Safety Guardrail**: Overrides acceptance if total spend exceeds `B_max`.
 
 ---
 
@@ -253,7 +263,7 @@ When the seller offers a low unit rate but demands an inflated batch volume:
 
 The frontend integrates a Cloudinary transformation engine with in-memory memoization ([`frontend/src/utils/images.ts`](file:///f:/razorpay_hackathon/frontend/src/utils/images.ts)):
 
-* **Dynamic Transforms**:
+* **Dynamic Delivery Transforms**:
   - `f_auto` (Format Auto): Negotiates best next-gen image format via browser headers (WebP/AVIF for modern browsers, progressive JPEG fallback).
   - `q_auto` (Quality Auto): Applies content-aware compression that removes 40–60% of unnecessary bytes without perceptual loss.
   - `w_{width}`: Downscales high-resolution master images server-side:
@@ -297,21 +307,21 @@ sequenceDiagram
 
 ---
 
-## 💻 User Interfaces & Portal Surfaces
+## 💻 Portals & User Workflows
 
 ### Wholesale Storefront & Catalog
-* **URL**: `http://localhost:5173/` (Buyer role)
+* **Route**: `/` (Wholesale Storefront — Buyer View)
 * Browse 75 policy-backed wholesale products across categories (Knitwear, Electronics, Furniture, Sports, Jewelry, etc.).
 * Category filter tabs, debounced search bar, CLS-safe 4:3 product cards with lazy loading.
 * Direct "Add to Cart" or "Negotiate" triggers. Internal SKU codes are cleanly abstracted for buyers.
 
 ### Autonomous Negotiation Room
-* **URL**: `http://localhost:5173/session/:session_id`
+* **Route**: `/session/:session_id` (Bilateral Negotiation Room)
 * Interactive bargaining dashboard supporting both human moves and **Agent-to-Agent (A2A)** auto-runs.
 * Live round timeline, price metrics, give-get justification text, and instant Razorpay payment button upon agreement.
 
 ### Executive Merchant Review Desk
-* **URL**: `http://localhost:5173/merchant` (Merchant role)
+* **Route**: `/merchant` (Executive Merchant Desk — Merchant View)
 * Dedicated dashboard for merchants to review sessions escalated to `PENDING_APPROVAL`.
 * Displays floor margins, safety stock alerts, and allows single-click **Approve**, **Reject**, or **Counter-Offer**.
 
@@ -355,7 +365,7 @@ Handshake-AI/
 │   └── vite.config.ts                          # Vite bundler configuration
 │
 ├── express_gateway/                            # Express 5.x API Gateway & Reverse Proxy
-│   ├── server.js                               # Express application entrypoint (Port 8000)
+│   ├── server.js                               # Express application entrypoint
 │   ├── routes/router.js                        # Mounted API routes & middleware bindings
 │   ├── middleware/                             # Auth & B2B role verification middleware
 │   ├── controllers/                            # Gateway route controllers
@@ -368,7 +378,7 @@ Handshake-AI/
 │   └── config/                                 # DB (Supabase) & Cloudinary SDK configurations
 │
 ├── backend/                                    # Core Python AI Engine & Guardrail Service
-│   ├── main.py                                 # FastAPI application entrypoint (Port 8001)
+│   ├── main.py                                 # FastAPI application entrypoint
 │   ├── api/                                    # FastAPI route handlers, RBAC, Pydantic schemas
 │   ├── guardrail/                              # Two-phase pricing waterfall engine
 │   │   └── rules/                              # 6 Mathematical pricing rules
@@ -387,91 +397,115 @@ Handshake-AI/
 
 ---
 
-## 🚀 Installation & Full-Stack Deployment
+## 🚀 Production Deployment & Configuration
 
-### Prerequisites
+### Architecture Topology
 
-* **Node.js**: v18.0.0 or later (v20+ recommended)
-* **Python**: v3.10 or later (v3.11/v3.12 recommended)
-* **Supabase**: PostgreSQL database with configured tables
-* **Groq API Key**: For low-latency LLM inference
-* **Cloudinary Account**: Cloud name and API credentials
-* **Razorpay Test Account**: Key ID and Secret
+In a production environment, the three services deploy as independent horizontally scalable containers behind a secure reverse proxy (e.g. AWS ALB, Cloudflare, Traefik, or Nginx):
+
+```text
+[ Internet Clients ]
+        │ (HTTPS)
+        ▼
+[ Reverse Proxy / Cloudflare ]
+        ├── /api/*   ──────▶ [ Express API Gateway Service ] ──▶ [ PostgreSQL / Supabase ]
+        │                                 │
+        │                       (Private VPC / Service Mesh)
+        │                                 ▼
+        │                    [ FastAPI AI Core Engine ] ──▶ [ Groq Inference API ]
+        │
+        └── /*       ──────▶ [ React Frontend SPA / CDN ]
+```
 
 ---
 
-### Environment Configuration
+### Environment Variables Specification
 
-Ensure `.env` files are configured in the respective directories:
-
-#### Root & Backend `.env` (`backend/.env`):
+#### 1. AI Core Engine Service (`backend/.env`):
 ```ini
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_PUBLISHABLE_KEY=your-supabase-publishable-key
-SUPABASE_SECRET_KEY=your-supabase-secret-key
+# Database & Persistence
+SUPABASE_URL=https://<your-project-id>.supabase.co
+SUPABASE_PUBLISHABLE_KEY=<your-supabase-publishable-key>
+SUPABASE_SECRET_KEY=<your-supabase-secret-key>
 
-GROQ_API_KEY=gsk_your_groq_api_key
+# LLM Inference
+GROQ_API_KEY=gsk_<your-groq-api-key>
 GROQ_MODEL=openai/gpt-oss-120b
 
-RAZORPAY_KEY_ID=rzp_test_your_key_id
-RAZORPAY_KEY_SECRET=your_razorpay_key_secret
+# Payment Settlement
+RAZORPAY_KEY_ID=rzp_live_<your-razorpay-key-id>
+RAZORPAY_KEY_SECRET=<your-razorpay-key-secret>
 
-ADMIN_KEY=8jaMvDxYsTqKFU9plb10gnoCiLyV9ZWb4vr_5ZIL7yY
-BUYER_KEY=jqL7zF7oQxCK8J-fCfSc_5K1GZH08EaJgyc3AcpCBJM
-MERCHANT_KEY=CDBGRMvnoyJssjWhYyA96AZrLIbQuy7vk6QbDHW5hkU
+# Internal Service-to-Service Secret Authentication
+ADMIN_KEY=<generated-secure-random-token>
+BUYER_KEY=<generated-secure-random-token>
+MERCHANT_KEY=<generated-secure-random-token>
 ```
 
-#### Express Gateway `.env` (`express_gateway/.env`):
+#### 2. API Gateway Service (`express_gateway/.env`):
 ```ini
 PORT=8000
-PYTHON_SERVICE_URL=http://127.0.0.1:8001
-JWT_SIGN=your_jwt_secret_key
+PYTHON_SERVICE_URL=http://ai-engine-service:8001
+JWT_SIGN=<your-secure-jwt-secret>
 
-CLOUD_NAME=your_cloudinary_cloud_name
-API_KEY=your_cloudinary_api_key
-API_SECRET=your_cloudinary_api_secret
+# Cloudinary CDN Configuration
+CLOUD_NAME=<your-cloudinary-cloud-name>
+API_KEY=<your-cloudinary-api-key>
+API_SECRET=<your-cloudinary-api-secret>
 
-RAZORPAY_KEY_ID=rzp_test_your_key_id
-RAZORPAY_KEY_SECRET=your_razorpay_key_secret
+# Razorpay Settlement Verification
+RAZORPAY_KEY_ID=rzp_live_<your-razorpay-key-id>
+RAZORPAY_KEY_SECRET=<your-razorpay-key-secret>
+
+# Service Token (must match ADMIN_KEY in AI Core)
+ADMIN_KEY=<same-admin-key-as-ai-engine>
+```
+
+#### 3. Client Web Application (`frontend/.env`):
+```ini
+VITE_API_BASE_URL=https://api.yourdomain.com/api/v1
 ```
 
 ---
 
-### Starting the Platform
+### Microservice Orchestration Guide
 
-Open three terminal windows to launch all tiers:
-
-#### 1. Start FastAPI AI Engine (Port 8001)
+#### 1. Start FastAPI AI Core Engine
 ```powershell
-# Activate virtual environment
-.venv\Scripts\activate
-
-# Launch Python AI engine
-uvicorn backend.main:app --port 8001 --reload
+# In production: run via gunicorn + uvicorn workers
+uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8001} --workers 4
 ```
-*Health verification*: Visit `http://127.0.0.1:8001/api/v1/health` $\rightarrow$ `{ "status": "ok", "engine": "negotiation-agent-v1" }`
 
-#### 2. Start Express API Gateway (Port 8000)
+#### 2. Start Express API Gateway
 ```powershell
 cd express_gateway
-npm install
+npm install --omit=dev
 node server.js
 ```
-*Gateway verification*: Console outputs `Listening at port 8000`.
 
-#### 3. Start React Frontend (Port 5173)
+#### 3. Build & Deploy Client Frontend
 ```powershell
 cd frontend
 npm install
-npm run dev
+npm run build
+# Deploy dist/ to any edge CDN, S3 + CloudFront, Vercel, or Nginx static host
 ```
-*Access Application*: Open your browser at `http://localhost:5173`.
+
+---
+
+### Health Probes & Readiness Checks
+
+| Service | Probe Endpoint | Expected Status | Purpose |
+|---|---|---|---|
+| **AI Core Engine** | `GET /api/v1/health` | HTTP 200 (`{ "status": "ok", "engine": "negotiation-agent-v1" }`) | Kubernetes Liveness / Container health check |
+| **API Gateway** | `GET /api/v1/catalog` | HTTP 401 (Auth required) or HTTP 200 (with Bearer token) | Confirms database connectivity & gateway routing |
+| **Media CDN** | Direct URL ping | HTTP 200 | Confirms edge CDN image delivery |
 
 ---
 
 ## 📡 API Gateway Reference
 
-The Express Gateway runs on **Port 8000** and serves as the primary API for client applications:
+The Express Gateway serves as the centralized, secure API entrypoint:
 
 | Method | Endpoint | Auth Required | Description |
 |---|---|---|---|
@@ -495,7 +529,7 @@ The Express Gateway runs on **Port 8000** and serves as the primary API for clie
 
 ---
 
-## 🗄️ Database Schema & Parity
+## 🗄️ Database Relational Integrity & Schema
 
 Handshake AI enforces complete 1:1 relational parity across Supabase tables:
 
@@ -510,19 +544,19 @@ catalog_skus (75 rows) <=================> pricing_policies (75 rows)
   └── Image_url (Cloudinary CDN URL)         └── max_rounds
 ```
 
-- **Parity Status**: 100% of catalog items have configured pricing policies. No unmapped SKUs exist.
-- **Media Status**: 100% of items have verified Cloudinary CDN URLs (zero `null` images).
+- **Relational Integrity**: 100% of catalog items have configured pricing policies. No unmapped SKUs exist.
+- **Media Parity**: 100% of items have verified Cloudinary CDN URLs (zero `null` images).
 
 ---
 
-## 📚 Academic Grounding & Citations
+## 📚 Academic Grounding & Game-Theoretic Research
 
 1. **PrefBench: Benchmarking Preference Elicitation in Multi-Agent Negotiation** (arXiv:2605.22855)
    - *Application*: Enforces strict information asymmetry. Private inventory counts and distress signals are quarantined to internal merchant reasoning.
 2. **Dynamic Bargaining under Asymmetric Information in Supply Chains** (arXiv:2608.07538)
    - *Application*: Grounds logrolling and volume allocation mechanisms. Concessions frame inventory batches as priority allocations rather than surplus dumps.
 3. **AgenticPay: Autonomous Agent Negotiation with Multi-Rail Payment Settlement** (arXiv:2602.06008)
-   - *Application*: Establishes dual-metric buyer evaluation (Unit Price $\le$ Reservation Price $\land$ Total Outlay $\le$ Budget Cap) and automated handoff to settlement rails.
+   - *Application*: Establishes dual-metric buyer evaluation (Unit Price ≤ Reservation Price ∧ Total Outlay ≤ Budget Cap) and automated handoff to settlement rails.
 4. **Getting to Yes: Negotiating Agreement Without Giving In** (Fisher, Ury & Patton, Harvard Negotiation Project)
    - *Application*: Informs "Give-Get" prompt design: the seller never concedes on unit price without demanding a commercial trade-off.
 
