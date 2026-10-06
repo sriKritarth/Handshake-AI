@@ -52,7 +52,7 @@ export const apiSlice = createApi({
       }
     >({
       query: (userData) => ({
-        url: "/auth/signup",
+        url: "/auth/sign_up",
         method: "POST",
         body: userData,
       }),

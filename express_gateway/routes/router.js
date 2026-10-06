@@ -21,8 +21,7 @@ const {imageUpload} = require("../controllers/file-upload/cloudinary_upload")
 
 
 // Authentication & Profile Routes
-router.post("/auth/signup", sign_up);
-router.post("/auth/sign_up", sign_up); // alias
+router.post("/auth/sign_up", sign_up); 
 router.post("/auth/login", login);
 router.get("/auth/me", authenticateToken, getme);
 router.post("/auth/logout", authenticateToken, logout);
