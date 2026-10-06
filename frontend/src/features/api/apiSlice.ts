@@ -7,10 +7,16 @@ import {
   MerchantApprovalRequest,
 } from "@/types/api.types";
 
+const getBaseUrl = (): string => {
+  const envUrl = import.meta.env.VITE_API_URL || "http://localhost:8000";
+  const cleanUrl = envUrl.replace(/\/+$/, "");
+  return cleanUrl.endsWith("/api/v1") ? cleanUrl : `${cleanUrl}/api/v1`;
+};
+
 export const apiSlice = createApi({
   reducerPath: "api",
   baseQuery: fetchBaseQuery({
-    baseUrl: "http://localhost:8000/api/v1",
+    baseUrl: getBaseUrl(),
     prepareHeaders: (headers) => {
       const token = localStorage.getItem("auth_token");
       if (token) {

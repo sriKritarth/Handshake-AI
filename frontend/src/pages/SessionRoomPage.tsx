@@ -344,7 +344,7 @@ export const SessionRoomPage: React.FC = () => {
 
           <div className="mt-4 flex justify-center gap-3">
             <a
-              href={`http://127.0.0.1:8001/api/v1/checkout/${session.session_id}`}
+              href={`${(import.meta.env.VITE_CHECKOUT_URL || "http://127.0.0.1:8001").replace(/\/+$/, "")}/api/v1/checkout/${session.session_id}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 rounded-xl bg-primary-500 px-6 py-3 text-sm font-bold text-neutral-950 shadow-glow hover:bg-primary-400 transition-all active:scale-95"
