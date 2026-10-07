@@ -14,6 +14,16 @@ app.use(express.json({
     }
 }));
 
+// Keep-Alive Heartbeat: Pings Python FastAPI service every 12 minutes to prevent cold starts
+const PYTHON_SERVICE_URL = (process.env.PYTHON_SERVICE_URL);
+if (PYTHON_SERVICE_URL) {
+  setInterval(() => {
+    fetch(`${PYTHON_SERVICE_URL}/api/v1/health`)
+      .then(() => console.log("💓 Keep-alive ping sent to Python engine"))
+      .catch((err) => console.warn("Keep-alive ping failed:", err.message));
+  }, 14 * 60 * 1000); // 14 minutes
+}
+
 
 app.use(cors(
     {
