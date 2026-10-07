@@ -27,7 +27,7 @@ if (PYTHON_SERVICE_URL) {
 
 app.use(cors(
     {
-        origin : ["https://handshake-ai-tau.vercel.app" , "http://localhost:5173"],
+        origin : ["https://handshake-ai-88bv.vercel.app" , "http://localhost:5173"],
         credentials : true
     }
 ));
