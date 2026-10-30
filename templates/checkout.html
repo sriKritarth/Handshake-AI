@@ -247,7 +247,8 @@
       name: "Handshake AI",
       description: "{{ product_name }} ({{ quantity }} units)",
       notes: {
-        session_id: "{{ session_id }}" // <--- Sent to Razorpay and returned in the webhook!
+        session_id: "{{ session_id }}",
+        reservation_id: "{{ reservation_id }}"
       },
       handler: function (response) {
         // When done, simply redirect back to the session room

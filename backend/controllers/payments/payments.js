@@ -3,6 +3,7 @@ const supabase = require("../../config/db");
 const path = require("path");
 const { processDirectWebhook } = require("../../features/payments/paymentService");
 const { escapeHtml } = require("../../utils/sanitize");
+const { createOrGetHoldReservation } = require("../../features/payments/inventoryReservationService");
 
 exports.checkout = async function (req, res) {
     try {
@@ -52,6 +53,25 @@ exports.checkout = async function (req, res) {
         // 3. Extract quantity from the latest offer event (or fallback to 1)
         const latestOffer = session.offer_events?.sort((a, b) => b.round_number - a.round_number)[0];
         const quantity = latestOffer?.quantity || 1;
+        const skuCode = session.catalog_skus?.sku_code;
+
+        // Step 2: Optimistic Stock Check & HOLD Reservation (10-minute hold)
+        const holdResult = await createOrGetHoldReservation(supabase, {
+            sessionId: session.id,
+            skuCode,
+            buyerId: session.buyer_id || req.user?.id,
+            qty: quantity,
+            holdDurationMinutes: 10,
+        });
+
+        if (!holdResult.success && holdResult.conflict) {
+            return res.status(409).json({
+                success: false,
+                conflict: true,
+                available_stock: holdResult.availableStock,
+                message: "Product currently held by other buyers or out of stock",
+            });
+        }
 
         // 4. Calculate exact outlay
         const unitPrice = Number(session.final_agreed_price);
@@ -72,6 +92,8 @@ exports.checkout = async function (req, res) {
                 amount: amount,
                 amount_paise: amountPaise,
                 currency: "INR",
+                reservation_id: holdResult.reservation?.id,
+                reservation_expires_at: holdResult.reservation?.expires_at,
                 payment_url: `/api/v1/checkout/${session.id}/page`,
                 payment_status: rzpOrder?.status || "CREATED",
                 session_status: session.status,
@@ -114,6 +136,22 @@ exports.renderCheckoutPage = async function (req, res) {
 
         const sortedOffers = (session.offer_events || []).sort((a, b) => b.round_number - a.round_number);
         const qty = sortedOffers[0]?.quantity || 1;
+
+        // Step 2: Optimistic Stock Check & HOLD Reservation (10-minute hold)
+        const holdResult = await createOrGetHoldReservation(supabase, {
+            sessionId: session.id,
+            skuCode: session.catalog_skus?.sku_code,
+            buyerId: session.buyer_id || req.user?.id,
+            qty,
+            holdDurationMinutes: 10,
+        });
+
+        if (!holdResult.success && holdResult.conflict) {
+            return res.status(409).json({
+                message : "Product is in currrently hold by other buyers"
+            });
+        }
+
         const unitPrice = Number(session.final_agreed_price);
         const amount = unitPrice * qty;
         const amountPaise = Math.round(amount * 100);
@@ -132,6 +170,7 @@ exports.renderCheckoutPage = async function (req, res) {
             amount_paise: amountPaise,
             currency: "INR",
             key_id: escapeHtml(keyId),
+            reservation_id: escapeHtml(holdResult.reservation?.id || ""),
         };
 
         for (const [k, v] of Object.entries(replacements)) {
