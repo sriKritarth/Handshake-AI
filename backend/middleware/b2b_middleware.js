@@ -18,7 +18,7 @@ const verifySessionAccess = async (req, res, next) => {
     // 2. Fetch session basic ownership record
     const { data: session, error } = await supabase
       .from("negotiation_sessions")
-      .select("id, buyer_id, status, sku_id")
+      .select("id, buyer_id, merchant_id, status, sku_id")
       .eq("id", session_id.trim())
       .maybeSingle();
 
@@ -36,11 +36,20 @@ const verifySessionAccess = async (req, res, next) => {
       });
     }
 
-    // 3. IDOR Ownership Check (Buyers can only access their own)
+    // 3. IDOR Ownership Check
+    // Buyers can only access their own sessions
     if (userRole === "buyer" && String(session.buyer_id) !== String(userId)) {
       return res.status(403).json({
         success: false,
         message: "Access denied. You do not own this negotiation session.",
+      });
+    }
+
+    // Merchants can only access sessions tied to their own SKUs (admins bypass)
+    if (userRole === "merchant" && session.merchant_id && String(session.merchant_id) !== String(userId)) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. You do not own this merchant session.",
       });
     }
 

@@ -4,12 +4,25 @@ require("dotenv").config();
 
 exports.getPendingsesssions = async function (req, res) {
     try {
-        const { data, error } = await supabase.from('merchant_approvals').select("*").eq("status", "PENDING").order("created_at", { ascending: false });
+        const merchantId = req.user?.id;
+        const userRole = req.user?.role;
+
+        let query = supabase.from('merchant_approvals').select(`
+            *,
+            negotiation_sessions!inner(id, merchant_id, sku_id, status)
+        `).eq("status", "PENDING");
+
+        // Multi-tenant scoping: Filter only approvals for sessions owned by this merchant (admins see all)
+        if (userRole !== "admin" && merchantId) {
+            query = query.eq("negotiation_sessions.merchant_id", merchantId);
+        }
+
+        const { data, error } = await query.order("created_at", { ascending: false });
         if (error) {
             return res.status(502).json({
                 success: false,
                 message: error.message || null
-            })
+            });
         }
 
         if (!data || data.length === 0) {
@@ -59,27 +72,58 @@ exports.getPendingsesssions = async function (req, res) {
             success: true,
             message: activePending.length > 0 ? "Data retrieved successfully" : "No pending request found",
             data: activePending
-        })
+        });
     }
     catch (error) {
         console.log(error);
         return res.status(500).json({
             success: false,
             message: error.message
-        })
+        });
     }
-}
-
+};
 
 exports.counterApprove = async function (req, res) {
     try {
         const { session_id } = req.params;
+        const merchantId = req.user?.id;
+        const userRole = req.user?.role;
+
+        // 1. Multi-Tenant Scoping: Verify merchant ownership on negotiation_sessions
+        const { data: session, error: sessError } = await supabase
+            .from("negotiation_sessions")
+            .select("id, merchant_id, buyer_id, status")
+            .eq("id", session_id)
+            .maybeSingle();
+
+        if (sessError) {
+            return res.status(502).json({
+                success: false,
+                message: sessError.message || "Failed to verify session"
+            });
+        }
+
+        if (!session) {
+            return res.status(404).json({
+                success: false,
+                message: `Session ${session_id} not found`
+            });
+        }
+
+        if (session.merchant_id && String(session.merchant_id) !== String(merchantId) && userRole !== "admin") {
+            return res.status(403).json({
+                success: false,
+                message: "Forbidden: You are not authorized to make decisions on this merchant session."
+            });
+        }
+
+        // 2. Fetch pending approval record
         const { data, error } = await supabase.from('merchant_approvals').select("*").match({ session_id: session_id, status: "PENDING" }).maybeSingle();
         if (error) {
             return res.status(502).json({
                 success: false,
                 message: error.message || null
-            })
+            });
         }
 
         if (!data) {
@@ -89,11 +133,8 @@ exports.counterApprove = async function (req, res) {
             });
         }
 
-
-        //session id present
         let validactions = ["approve", "reject", "counter"];
         const { action, counter_price, merchant_notes } = req.body;
-        
 
         const normalizedAction = String(action).toLowerCase().trim();
         if (!normalizedAction || !validactions.includes(normalizedAction)) {
@@ -103,24 +144,20 @@ exports.counterApprove = async function (req, res) {
             });
         }
 
-
         // 3. Counter price is only mandatory for "counter"
         if (normalizedAction === "counter") {
-
-            if(!counter_price || isNaN(counter_price) || counter_price <= 0){
+            if (!counter_price || isNaN(counter_price) || counter_price <= 0) {
                 return res.status(400).json({
                     success: false,
                     message: "A positive 'counter_price' is required when action is 'counter'."
                 });
             }
-
         }
 
-        let price ;
-        if(normalizedAction !== "counter"){
+        let price;
+        if (normalizedAction !== "counter") {
             price = Number.parseFloat(data.requested_price);
         }
-
 
         const result = await negotiationService.handleMerchantDecision({
             sessionId: session_id,
@@ -134,14 +171,12 @@ exports.counterApprove = async function (req, res) {
             data: result,
             message: "Merchant decision processed successfully",
         });
-
-
     }
     catch (error) {
         console.error(error);
         return res.status(500).json({
             success: false,
             message: error.message
-        })
+        });
     }
-}
+};

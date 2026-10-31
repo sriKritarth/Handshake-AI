@@ -200,7 +200,7 @@
         </div>
         <div class="detail-row">
           <span>Agreed Unit Price</span>
-          <span>₹{{ "%.2f"|format(unit_price) }}</span>
+          <span>₹{{ unit_price }}</span>
         </div>
         <div class="detail-row">
           <span>Taxes & Processing</span>
@@ -208,12 +208,12 @@
         </div>
         <div class="detail-row total">
           <span>Total Payable</span>
-          <span class="total-amount">₹{{ "%.2f"|format(amount) }}</span>
+          <span class="total-amount">₹{{ amount }}</span>
         </div>
       </div>
 
       <button id="pay-btn" class="btn-pay">
-        <span>Pay ₹{{ "%.2f"|format(amount) }} with Razorpay</span>
+        <span>Pay ₹{{ amount }} with Razorpay</span>
       </button>
 
       <div class="footer-note">
@@ -231,7 +231,7 @@
         <div class="detail-row"><span>Status:</span> <strong style="color: #10b981;">PAID / SETTLED</strong></div>
         <div class="detail-row"><span>Product:</span> <span>{{ product_name }}</span></div>
         <div class="detail-row"><span>Quantity:</span> <span>{{ quantity }} units</span></div>
-        <div class="detail-row"><span>Total Settled:</span> <strong style="color: #10b981;">₹{{ "%.2f"|format(amount) }}</strong></div>
+        <div class="detail-row"><span>Total Settled:</span> <strong style="color: #10b981;">₹{{ amount }}</strong></div>
         <div class="detail-row"><span>Payment ID:</span> <code id="payment-id-val"></code></div>
         <div class="detail-row"><span>Session ID:</span> <code>{{ session_id }}</code></div>
       </div>

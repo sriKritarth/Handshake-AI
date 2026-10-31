@@ -251,7 +251,7 @@ exports.cartCheckout = async function (req, res) {
         for (const item of items) {
             const sku = skuMap.get(item.sku_code);
             const stock = sku.inventory_qty != null ? Number(sku.inventory_qty) : 1000;
-            const reqQty = Number(item.quantity || 1);
+            const reqQty = Number(Math.max(1 , item.quantity) || 1);
 
             // HLD: stock? No -> stock N.A message client
             if (stock <= 0 || stock < reqQty) {

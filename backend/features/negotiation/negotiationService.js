@@ -53,6 +53,7 @@ class NegotiationService {
       .insert({
         id: sessionId,
         sku_id: sku.id,
+        merchant_id: sku.merchant_id || null,
         buyer_id: String(buyerId),
         channel: channel,
         status: "IN_PROGRESS",

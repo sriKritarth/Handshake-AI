@@ -58,6 +58,5 @@ router.get("/checkout/:session_id/page", renderCheckoutPage);
 router.post("/checkout/cart", authenticateToken, requireRole("buyer"), cartCheckout);
 router.post("/checkout/webhook"  ,  checkout_webhook);
 
-// image upload
-router.post("/image_upload/:sku_code" , imageUpload);
+// router.post("/image_upload/:sku_code" , imageUpload);
 module.exports = router;
