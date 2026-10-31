@@ -239,6 +239,8 @@ exports.buyer_moves = async function (req, res) {
       acceptLastOffer: Boolean(accept_last_offer),
     });
 
+    result.internal_reasoning = undefined;
+
     return res.status(200).json({
       success: true,
       data: result,
