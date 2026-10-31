@@ -15,6 +15,7 @@ const {
 const {a2aStep,a2aAutoRun} = require("../controllers/negotiation/a2a_negotiation")
 const {getPendingsesssions , counterApprove} = require("../controllers/merchant-negotiation/negotiation");
 const { verifySessionAccess } = require("../middleware/b2b_middleware");
+const { streamSession } = require("../controllers/events");
 const {checkout , checkout_webhook , cartCheckout, renderCheckoutPage} = require("../controllers/payments/payments")
 const {imageUpload} = require("../controllers/file-upload/cloudinary_upload")
 const {auth_limiter , api_limiter , auto_negotiate} = require("../utils/rate-limiter");
@@ -37,6 +38,7 @@ router.get("/catalog/:sku_code", getCatalogbysku);
 router.post("/sessions", api_limiter , authenticateToken, requireRole("buyer", "admin"), createSession);
 router.get("/sessions", authenticateToken, requireRole("buyer", "merchant", "admin"), listSessions);
 router.get("/sessions/:session_id", authenticateToken, requireRole("buyer", "merchant", "admin"), verifySessionAccess, getSession);
+router.get("/sessions/:session_id/stream", authenticateToken, verifySessionAccess, streamSession);
 router.post("/sessions/:session_id/moves", api_limiter , authenticateToken, requireRole("buyer"), verifySessionAccess, buyer_moves);
 router.post("/sessions/:session_id/accept", api_limiter , authenticateToken, requireRole("buyer"), verifySessionAccess, acceptOffer);
 router.post("/sessions/:session_id/decline",api_limiter ,  authenticateToken, requireRole("buyer"), verifySessionAccess, declineOffer);

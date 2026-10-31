@@ -145,7 +145,7 @@ exports.sign_up = async (req, res) => {
     const token = jwt.sign(
       payload,
       process.env.JWT_SIGN,
-      { expiresIn: "7d" }
+      { expiresIn: "1d" }
     );
 
     // 11. Sanitized user response (strip password_hash)

@@ -8,6 +8,7 @@ const supabase = require("../../config/db");
 const { evaluatePreGuardrail } = require("../guardrails/preGuardrail");
 const { sellerAgentApp } = require("./sellerAgentGraph");
 const { createSettlementOrder } = require("../payments/paymentService");
+const sessionExpiryService = require("./sessionExpiryService");
 
 class NegotiationService {
   /**
@@ -109,8 +110,23 @@ class NegotiationService {
       throw new Error("Negotiation session not found.");
     }
 
+    // On-Demand check for inactivity expiration
+    const expiryCheck = await sessionExpiryService.checkAndExpireSession(session);
+    if (expiryCheck.expired) {
+      const err = new Error("Negotiation session expired due to inactivity.");
+      err.statusCode = 410;
+      err.status = "EXPIRED";
+      err.session_id = sessionId;
+      throw err;
+    }
+
     if (["AGREED", "REJECTED", "EXPIRED", "PAID"].includes(session.status)) {
-      throw new Error(`Session is already in terminal state '${session.status}'.`);
+      const err = new Error(`Session is already in terminal state '${session.status}'.`);
+      if (session.status === "EXPIRED") {
+        err.statusCode = 410;
+        err.status = "EXPIRED";
+      }
+      throw err;
     }
 
     const sku = session.catalog_skus;
@@ -376,6 +392,16 @@ class NegotiationService {
 
     if (error || !session) {
       throw new Error("Session not found");
+    }
+
+    // On-Demand check for inactivity expiration
+    const expiryCheck = await sessionExpiryService.checkAndExpireSession(session);
+    if (expiryCheck.expired) {
+      const err = new Error("Negotiation session expired due to inactivity.");
+      err.statusCode = 410;
+      err.status = "EXPIRED";
+      err.session_id = sessionId;
+      throw err;
     }
 
     const sortedEvents = (session.offer_events || []).sort((a, b) => a.round_number - b.round_number);

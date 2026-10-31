@@ -190,8 +190,15 @@ exports.getSession = async function (req, res) {
       message: "Session retrieved successfully",
     });
   } catch (err) {
+    if (err.statusCode === 410 || err.status === "EXPIRED") {
+      return res.status(410).json({
+        success: false,
+        status: "EXPIRED",
+        message: err.message || "Negotiation session expired due to inactivity.",
+      });
+    }
     console.error("Get session error:", err);
-    return res.status(err.message.includes("not found") ? 404 : 500).json({
+    return res.status(err.message?.includes("not found") ? 404 : 500).json({
       success: false,
       message: err.message || "Internal server error",
     });
@@ -238,6 +245,13 @@ exports.buyer_moves = async function (req, res) {
       message: "Negotiation move processed successfully",
     });
   } catch (err) {
+    if (err.statusCode === 410 || err.status === "EXPIRED") {
+      return res.status(410).json({
+        success: false,
+        status: "EXPIRED",
+        message: err.message || "Negotiation session expired due to inactivity.",
+      });
+    }
     console.error("Buyer move error:", err);
     return res.status(500).json({
       success: false,
@@ -265,6 +279,13 @@ exports.acceptOffer = async function (req, res) {
       message: "Offer accepted successfully. Proceed to direct checkout.",
     });
   } catch (err) {
+    if (err.statusCode === 410 || err.status === "EXPIRED") {
+      return res.status(410).json({
+        success: false,
+        status: "EXPIRED",
+        message: err.message || "Negotiation session expired due to inactivity.",
+      });
+    }
     console.error("Accept offer error:", err);
     return res.status(500).json({
       success: false,
