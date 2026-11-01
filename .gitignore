@@ -8,6 +8,22 @@ DEVELOPER.md
 .env
 README.md
 FRONTEND.MD
+.agents/skills
+# Next.js & Build outputs
+frontend/.next/
+
+# Dependencies
+frontend/node_modules/
+# TypeScript cache
+frontend/tsconfig.tsbuildinfo
+
+# Local Environment & Secrets
+frontend/.env
+
+
+
+
+
 
 
 

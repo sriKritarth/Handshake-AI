@@ -1,0 +1,122 @@
+.hero {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 60px;
+  align-items: center;
+  padding: 60px 0 40px;
+}
+
+.eyebrow {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--green);
+  margin-bottom: 12px;
+}
+
+.title {
+  font-family: var(--serif);
+  font-size: 48px;
+  line-height: 1.15;
+  font-weight: 400;
+  margin-bottom: 20px;
+}
+
+.title em {
+  font-style: italic;
+  font-weight: 400;
+}
+
+.desc {
+  font-size: 16px;
+  color: var(--muted);
+  line-height: 1.6;
+  max-width: 460px;
+  margin-bottom: 28px;
+}
+
+.actions {
+  display: flex;
+  gap: 16px;
+}
+
+.primaryBtn {
+  background: var(--green);
+  color: var(--paper);
+  padding: 12px 24px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 600;
+  display: inline-block;
+  transition: background 0.15s ease;
+}
+
+.primaryBtn:hover {
+  background: var(--green-hover);
+}
+
+.secondaryBtn {
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  padding: 12px 24px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  font-weight: 600;
+  display: inline-block;
+  transition: all 0.15s ease;
+}
+
+.secondaryBtn:hover {
+  border-color: var(--ink);
+  background: var(--paper-card);
+}
+
+.heroArt {
+  position: relative;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--line);
+}
+
+.heroArt svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  padding: 30px 0;
+  margin-top: 20px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.strip span b {
+  color: var(--ink);
+  margin-right: 8px;
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .hero {
+    grid-template-columns: 1fr;
+    gap: 40px;
+    padding: 40px 0 20px;
+  }
+  .title {
+    font-size: 36px;
+  }
+  .strip {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}

@@ -23,7 +23,7 @@ app.use(helmet());
 
 app.use(cors(
     {
-        origin : ["https://handshake-ai-88bv.vercel.app" , "http://localhost:5173"],
+        origin : ["https://handshake-ai-88bv.vercel.app" , "http://localhost:3000"],
         credentials : true
     }
 ));
@@ -47,7 +47,7 @@ const routes = require("./routes/router")
 app.use("/api/v1", routes);
 
 
-app.listen(port, () => {
+app.listen(port,'0.0.0.0' , () => {
     console.log(`Listening at  port ${port}`)
 })
 
