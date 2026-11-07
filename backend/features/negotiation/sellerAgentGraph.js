@@ -9,7 +9,8 @@
 
 const { StateGraph, END, START, Annotation, MemorySaver } = require("@langchain/langgraph");
 const { evaluateBuyerGuardrails, applyPostLlmGuardrails } = require("./guardrails");
-const { getSellerDecision } = require("./sellerAgent");
+const sellerAgent = require("./sellerAgent");
+const { getSellerDecision } = sellerAgent;
 
 // Define LangGraph State Schema
 const NegotiationState = Annotation.Root({
@@ -95,7 +96,8 @@ async function sellerAgentNode(state) {
     messages,
   } = state;
 
-  const rawDecision = await getSellerDecision({
+  const decisionFn = sellerAgent.getSellerDecision || getSellerDecision;
+  const rawDecision = await decisionFn({
     catalogSku,
     pricingPolicy,
     currentRound,
@@ -121,7 +123,7 @@ async function sellerAgentNode(state) {
  */
 function routeAfterWaterfall(state) {
   const { buyerOffer = {}, catalogSku = {}, pricingPolicy = {}, currentRound = 1, maxRounds = 5 } = state;
-  const listPrice = Number(catalogSku.base_price || pricingPolicy.list_price || 500);
+  const listPrice = Number(catalogSku.base_price);
   const offeredPrice = Number(buyerOffer.offered_price || 0);
   const round = Number(currentRound || 1);
   const maxR = Number(maxRounds || 5);
@@ -213,18 +215,45 @@ async function postGuardrailNode(state) {
     maxRounds,
   });
 
-  // 2. Rule Check for Merchant Escalation
+  const orderQty = Number(buyerOffer.quantity || 1);
+
+  // --- PART B: Inventory Shortage Escalation & Trade Secret Protection ---
+  const batchIncentiveRule = waterfallResult?.rule_results?.find(
+    (r) => r.rule_name === "batch_liquidation_incentive" && r.passed
+  );
+  const availableStock = Number(
+    catalogSku.inventory_days ??
+    catalogSku.inventory_qty ??
+    catalogSku.stock_qty ??
+    0
+  );
+  const isQuantityShortage = Boolean(batchIncentiveRule) || (availableStock > 0 && orderQty > availableStock);
+
   let nextStatus = "IN_PROGRESS";
 
-  // If waterfall rules failed or soft gate flagged for approval
-  if (waterfallResult.requires_merchant_approval && !waterfallResult.passed) {
-    nextStatus = "PENDING_APPROVAL"; // Routed to Merchant Review Desk
-  } else if (finalDecision.needs_approval) {
-    nextStatus = "PENDING_APPROVAL"; // Routed to Merchant Review Desk
-  } else if (finalDecision.should_accept) {
-    nextStatus = "AGREED";           // Deal agreed!
-  } else if (currentRound >= maxRounds) {
-    nextStatus = "EXPIRED";          // Round limit reached (Round < 5 check: No)
+  if (isQuantityShortage) {
+    finalDecision.needs_approval = true;
+    finalDecision.should_accept = false;
+    finalDecision.justification = 
+      "Thank you for your bulk wholesale order. Because your requested volume exceeds our immediate ready-dispatch allocation, we have forwarded your order to our merchant desk for custom volume allocation and fulfillment scheduling. Our team will review the request and update you shortly.";
+    finalDecision.internal_reasoning = 
+      `Inventory Allocation Alert: Buyer requested ${orderQty} units, which exceeds current ready stock (${availableStock} units). Escalated to merchant for volume procurement and allocation review.`;
+    nextStatus = "PENDING_APPROVAL";
+  } else {
+    // 2. Rule Check for Merchant Escalation
+    const hasHeavyLotPolicy = pricingPolicy.heavy_lot_threshold != null;
+    const isSmallLotUnderPolicy = hasHeavyLotPolicy && orderQty < Number(pricingPolicy.heavy_lot_threshold);
+
+    if (finalDecision.needs_approval && isSmallLotUnderPolicy) {
+      finalDecision.needs_approval = false;
+      nextStatus = "IN_PROGRESS";
+    } else if (finalDecision.needs_approval) {
+      nextStatus = "PENDING_APPROVAL"; // Routed to Merchant Review Desk
+    } else if (finalDecision.should_accept) {
+      nextStatus = "AGREED";
+    } else if (currentRound >= maxRounds) {
+      nextStatus = "EXPIRED";
+    }
   }
 
   // 3. Append to LangGraph memory

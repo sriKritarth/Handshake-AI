@@ -6,11 +6,10 @@
 class GuardrailEngine {
   constructor(options = {}) {
     this.maxRounds = options.maxRounds || 5;
-    this.autoApproveThresholdPct = options.autoApproveThresholdPct || null;
   }
 
   evaluate(offer, policy) {
-    const listPrice = Number(offer.list_price || 500);
+    const listPrice = Number(offer.list_price);
     let currentPrice = Number(offer.proposed_price);
     const ruleResults = [];
     let requiresApproval = false;
@@ -62,8 +61,8 @@ class GuardrailEngine {
     }
 
     // 3. Margin Floor Rule
-    const costPrice = Number(policy.cost_price || 0);
-    const marginFloorPct = Number(policy.min_margin_pct || policy.margin_floor_pct || 0);
+    const costPrice = Number(policy.cost_price);
+    const marginFloorPct = Number(policy.min_margin_pct || 0);
     const minMarginPrice = costPrice * (1.0 + marginFloorPct / 100.0);
 
     const origOfferPrice = offer.original_proposed_price != null ? Number(offer.original_proposed_price) : currentPrice;
@@ -123,35 +122,54 @@ class GuardrailEngine {
       });
     }
 
+    // Rule 4b: Batch Liquidation Incentive Rule
+    const availableStock = Number(offer.available_stock || 0);
+    const requestedQty = Number(offer.quantity || 1);
+    let batchClearancePrice = null;
+
+    if(availableStock <= 0){
+      ruleResults.push({
+        rule_name : "batch_quantity_allocation",
+        passed : false , 
+        reason : "Unavailable Stock"
+      })
+    }
+
+    if (requestedQty > availableStock && availableStock > 0) {
+      const incentiveDiscountPct = 2.5; // 2.5% clearance discount
+      const discounted = listPrice * (1.0 - incentiveDiscountPct / 100.0);
+
+      // Floor price shield: Floor se kam kisi halat me nahi
+      batchClearancePrice = Math.max(floorPrice, Number(discounted.toFixed(2)));
+      ruleResults.push({
+        rule_name: "batch_liquidation_incentive",
+        passed: true,
+        incentive_price: batchClearancePrice,
+        capped_quantity: availableStock,
+        reason: "exceeds_inventory_clearing_incentive"
+      });
+    }
+
     // 5. Max Discount Rule & Merchant Escalation Check
-    const maxDiscountPct = Number(policy.max_total_discount_pct || 25.0);
+    const maxDiscountPct = listPrice > 0 ? ((listPrice - policy.floor_price) / listPrice) * 100 : 0;
     const discountPct = listPrice > 0 ? ((listPrice - currentPrice) / listPrice) * 100 : 0;
-    const autoApproveLimit = this.autoApproveThresholdPct != null 
-      ? this.autoApproveThresholdPct 
-      : maxDiscountPct * 0.8;
 
     if (discountPct > maxDiscountPct) {
-      const hardFloor = Number((listPrice * (1.0 - maxDiscountPct / 100.0)).toFixed(2));
-      currentPrice = hardFloor;
-      requiresApproval = true;
+      // const hardFloor = Number((listPrice * (1.0 - maxDiscountPct / 100.0)).toFixed(2));
+      // currentPrice = hardFloor;
+      // requiresApproval = true;
       ruleResults.push({
         rule_name: "max_discount",
         passed: false,
         reason: "exceeds_max_discount_cap",
         original_price: offer.proposed_price,
-        adjusted_price: hardFloor,
+        adjusted_price: currentPrice,
       });
       if (!blockingRule) blockingRule = "max_discount";
       decidingRule = "max_discount";
-    } else if (discountPct > autoApproveLimit) {
-      requiresApproval = true;
-      ruleResults.push({
-        rule_name: "max_discount",
-        passed: true,
-        reason: "soft_gate_approval_required",
-        adjusted_price: null,
-      });
-    } else {
+    }
+
+    else {
       ruleResults.push({
         rule_name: "max_discount",
         passed: true,
@@ -182,25 +200,23 @@ function evaluateBuyerGuardrails({
   maxRounds = 5,
   lastSellerPrice = null,
 }) {
-  const listPrice = Number(catalogSku.base_price || policyDict.list_price || 500);
-  const proposed = buyerMove.offered_price != null 
-    ? Number(buyerMove.offered_price) 
+  const listPrice = Number(catalogSku.base_price);
+  const proposed = buyerMove.offered_price != null
+    ? Number(buyerMove.offered_price)
     : (lastSellerPrice != null ? Number(lastSellerPrice) : listPrice);
 
   const offerObj = {
-    sku: catalogSku.sku_code || catalogSku.id,
+    sku: catalogSku.sku_code,
     proposed_price: proposed,
     original_proposed_price: proposed,
     list_price: listPrice,
     quantity: Number(buyerMove.quantity || 1),
     round_number: currentRound,
+    available_stock : Number((catalogSku.inventory_qty) || 0)
   };
 
   const engine = new GuardrailEngine({
-    maxRounds,
-    autoApproveThresholdPct: policyDict.auto_approve_threshold_pct != null 
-      ? Number(policyDict.auto_approve_threshold_pct) 
-      : null,
+    maxRounds
   });
 
   return engine.evaluate(offerObj, policyDict);

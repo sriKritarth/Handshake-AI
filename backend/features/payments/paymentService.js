@@ -14,7 +14,7 @@ require("dotenv").config();
 async function createSettlementOrder({ sessionId, amount}) {
   const amountPaise = Math.round(amount * 100);
   const testOrderId = `order_${sessionId.replace(/-/g, "").substring(0, 16)}`;
-  const directCheckoutUrl = `/api/v1/checkout/${sessionId}`;
+  const directCheckoutUrl = `/api/v1/checkout/${sessionId}/page`;
 
   // Check if order already exists in database
   const { data: existingOrder } = await supabase
@@ -23,7 +23,8 @@ async function createSettlementOrder({ sessionId, amount}) {
     .eq("session_id", sessionId)
     .maybeSingle();
 
-  if (existingOrder) {
+  if (existingOrder){
+      
     return {
       order_id: existingOrder.razorpay_order_id,
       amount: existingOrder.amount,
@@ -40,6 +41,7 @@ async function createSettlementOrder({ sessionId, amount}) {
     .insert({
       session_id: sessionId,
       razorpay_order_id: testOrderId,
+      razorpay_payment_link_id: "plink_" + testOrderId.replace("order_", ""),
       amount: amount,
       status: "CREATED",
       short_url: directCheckoutUrl,

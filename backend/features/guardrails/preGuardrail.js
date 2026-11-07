@@ -7,10 +7,11 @@
 // Common prompt injection attack patterns
 const INJECTION_PATTERNS = [
   /ignore\s+(all\s+)?(previous|prior|above)\s+instructions/i,
-  /system\s+prompt/i,
+  /system\s+(prompt|override|instruction)/i,
   /reveal\s+(your|the)\s+(instructions|prompt|secret|api\s*key|floor\s*price|margin)/i,
   /you\s+are\s+now\s+(an|in)\s+developer\s+mode/i,
-  /bypass\s+(guardrail|safety|rule|security)/i,
+  /(bypass|ignore)\s+(all\s+)?(guardrail|safety|rule|security)/i,
+  /developer\s+mode/i,
   /jailbreak/i,
   /as\s+an\s+ai\s+language\s+model,\s+you\s+must/i,
   /print\s+(all\s+)?(internal|hidden)\s+variables/i,

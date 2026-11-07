@@ -1,0 +1,497 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(36, 43, 36, 0.65);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.modal {
+  position: relative;
+  background: var(--paper-card);
+  width: 100%;
+  max-width: 820px;
+  height: 90vh;
+  max-height: 720px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: scaleUp 0.2s ease-out;
+}
+
+.header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #ffffff;
+}
+
+.productSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.headerTopRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  background: var(--accent-soft);
+  color: var(--green);
+  border-radius: 4px;
+}
+
+.liveIndicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.liveDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+  animation: pulseDot 2s infinite;
+}
+
+.liveDotOffline {
+  background: #f59e0b;
+  box-shadow: none;
+}
+
+.productName {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.3;
+}
+
+.pricingMeta {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.closeBtn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #f5f5f0;
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.closeBtn:hover {
+  background: #e9e9e2;
+  transform: scale(1.05);
+}
+
+.closeBtn svg {
+  width: 14px;
+  height: 14px;
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fafaf8;
+}
+
+.chatTranscript {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.chatTranscript::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chatTranscript::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 3px;
+}
+
+.messageRow {
+  display: flex;
+  flex-direction: column;
+  max-width: 78%;
+}
+
+.rowBuyer {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.rowSeller {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+.rowAssistant {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
+.rowSystem {
+  align-self: center;
+  align-items: center;
+  max-width: 90%;
+  margin: 6px 0;
+}
+
+.messageSender {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  margin-bottom: 3px;
+  padding: 0 4px;
+}
+
+.bubble {
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.bubbleBuyer {
+  background: var(--green);
+  color: #ffffff;
+  border-bottom-right-radius: 2px;
+}
+
+.bubbleSeller {
+  background: #ffffff;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-bottom-left-radius: 2px;
+}
+
+.bubbleAssistant {
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+  border-bottom-left-radius: 2px;
+}
+
+.bubbleSystem {
+  background: #f4f4f0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  padding: 6px 12px;
+  border-radius: 16px;
+  box-shadow: none;
+  text-align: center;
+}
+
+.messageTime {
+  font-size: 0.68rem;
+  color: var(--muted);
+  margin-top: 3px;
+  padding: 0 4px;
+}
+
+.quoteCard {
+  margin: 0 20px 10px 20px;
+  padding: 12px 16px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+}
+
+.quoteInfo {
+  display: flex;
+  flex-direction: column;
+}
+
+.quoteLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.quotePrice {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--green);
+}
+
+.quoteSavings {
+  font-size: 0.78rem;
+  color: #059669;
+  font-weight: 500;
+}
+
+.quoteActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.acceptDealBtn {
+  background: var(--green);
+  color: #ffffff;
+  border: none;
+  padding: 8px 16px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.acceptDealBtn:hover:not(:disabled) {
+  background: var(--green-hover);
+}
+
+.acceptDealBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.declineBtn {
+  background: transparent;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  padding: 8px 12px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.declineBtn:hover:not(:disabled) {
+  background: #fee2e2;
+}
+
+.declineBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.errorBanner {
+  margin: 0 20px 10px 20px;
+  padding: 10px 14px;
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.footer {
+  padding: 14px 20px;
+  background: #ffffff;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.quickActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.actionPill {
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 6px 12px;
+  background: #f5f5f0;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.actionPill:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: #c8cabf;
+}
+
+.actionPill:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.inputForm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inputGroup {
+  position: relative;
+  flex: 1;
+}
+
+.currencyPrefix {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.offerInput {
+  width: 100%;
+  padding: 10px 12px 10px 28px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 0.95rem;
+  background: #ffffff;
+  color: var(--ink);
+}
+
+.offerInput:focus {
+  outline: 2px solid var(--green);
+  outline-offset: -1px;
+}
+
+.qtyAdjuster {
+  display: flex;
+  align-items: center;
+  background: #f5f5f0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.qtyBtn {
+  width: 32px;
+  height: 38px;
+  background: transparent;
+  border: none;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qtyBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.qtyDisplay {
+  padding: 0 8px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--ink);
+  min-width: 24px;
+  text-align: center;
+}
+
+.submitOfferBtn {
+  background: var(--green);
+  color: #ffffff;
+  border: none;
+  padding: 10px 18px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.submitOfferBtn:hover:not(:disabled) {
+  background: var(--green-hover);
+}
+
+.submitOfferBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.concludedNotice {
+  padding: 12px;
+  text-align: center;
+  font-size: 0.88rem;
+  color: var(--muted);
+  background: #f4f4f0;
+  border-radius: 6px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleUp {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+@media (max-width: 640px) {
+  .modal {
+    height: 96vh;
+    max-height: 96vh;
+  }
+  .inputForm {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .qtyAdjuster {
+    align-self: center;
+  }
+  .submitOfferBtn {
+    width: 100%;
+  }
+}

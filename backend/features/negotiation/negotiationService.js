@@ -31,21 +31,17 @@ class NegotiationService {
       .or(`sku_id.eq.${sku.id},sku_code.eq.${sku.sku_code}`)
       .maybeSingle();
 
-     ;
-
-    return {sku , policy} ;
+    return { sku, policy };
   }
 
   /**
    * Start a new negotiation session
    */
   async createSession({ buyerId, skuCode, quantity = 1, channel = "CHAT" }) {
-    const {sku}  = await this.getSkuandPolicy(skuCode);
+    const { sku, policy } = await this.getSkuandPolicy(skuCode);
     const sessionId = crypto.randomUUID();
     const listPrice = Number(sku.base_price);
-
-    // Initial seller list offer
-    const openingPrice = listPrice;
+    const maxRounds = Number(policy?.max_rounds || 5);
 
     // 1. Create negotiation_sessions record
     const { data: session, error: sessError } = await supabase
@@ -66,29 +62,164 @@ class NegotiationService {
       throw new Error(`Failed to create negotiation session: ${sessError.message}`);
     }
 
-    // 2. Insert initial SELLER_AI offer event
-    await supabase.from("offer_events").insert({
+    // 2. Insert initial SELLER_GUARDRAIL offer event
+    const { error: initialEventError } = await supabase.from("offer_events").insert({
       id: crypto.randomUUID(),
       session_id: sessionId,
       round_number: 1,
-      sender: "SELLER_AI",
+      sender: "SELLER_GUARDRAIL",
       quantity: quantity,
-      proposed_price: openingPrice,
-      guardrail_clamped_price: openingPrice,
+      proposed_price: listPrice,
+      guardrail_clamped_price: listPrice,
       is_rule_passed: true,
-      public_justification: `Welcome to Handshake AI wholesale procurement. Our listed wholesale catalog price for ${sku.name} is ₹${openingPrice} per unit. Make an offer to begin negotiation.`,
+      rule_reason: "Initial catalog listing price",
+      public_justification: `Welcome to Handshake AI wholesale procurement. Our listed wholesale catalog price for ${sku.name} is ₹${listPrice} per unit. Make an offer to begin negotiation.`,
     });
+
+    if (initialEventError) {
+      console.error("Failed to record initial SELLER_GUARDRAIL offer event:", initialEventError.message);
+    }
 
     return {
       session_id: sessionId,
       sku_code: sku.sku_code,
       status: "IN_PROGRESS",
       current_round: 1,
-      max_rounds: 5,
-      seller_proposed_price: openingPrice,
+      max_rounds: maxRounds,
+      seller_proposed_price: listPrice,
       quantity: quantity,
-      draft_justification: `Wholesale starting offer: ₹${openingPrice} per unit.`,
+      draft_justification: `Wholesale starting offer: ₹${listPrice} per unit.`,
       created_at: session.created_at,
+    };
+  }
+
+  
+  async acceptOffer({ sessionId, buyerId, buyerMessage = "" }) {
+    const { data: session, error: sessError } = await supabase
+      .from("negotiation_sessions")
+      .select(`
+        *,
+        catalog_skus (*),
+        offer_events (*)
+      `)
+      .eq("id", sessionId)
+      .maybeSingle();
+
+    if (sessError || !session) {
+      throw new Error("Negotiation session not found.");
+    }
+
+    const expiryCheck = await sessionExpiryService.checkAndExpireSession(session);
+    if (expiryCheck.expired) {
+      const err = new Error("Negotiation session expired due to inactivity.");
+      err.statusCode = 410;
+      err.status = "EXPIRED";
+      err.session_id = sessionId;
+      throw err;
+    }
+
+    if (["AGREED", "REJECTED", "EXPIRED", "PAID"].includes(session.status)) {
+      const err = new Error(`Session is already in terminal state '${session.status}'.`);
+      if (session.status === "EXPIRED") {
+        err.statusCode = 410;
+        err.status = "EXPIRED";
+      }
+      throw err;
+    }
+
+    const sku = session.catalog_skus;
+    const { policy } = await this.getSkuandPolicy(sku.sku_code);
+    const maxRounds = (policy?.max_rounds || 5);
+
+    // Use joined session.offer_events first to avoid redundant DB round-trip
+    let allEvents = Array.isArray(session.offer_events) && session.offer_events.length > 0
+      ? session.offer_events
+      : [];
+
+    if (allEvents.length === 0) {
+      const { data: recentEvents, error: eventsError } = await supabase
+        .from("offer_events")
+        .select("*")
+        .eq("session_id", sessionId)
+        .order("created_at", { ascending: false });
+
+      if (eventsError) {
+        console.warn("Could not query offer_events directly, falling back to session relation:", eventsError.message);
+      } else if (Array.isArray(recentEvents)) {
+        allEvents = recentEvents;
+      }
+    }
+
+    // Sort events by created_at descending (or round_number descending)
+    allEvents = [...allEvents].sort((a, b) => {
+      const timeDiff = new Date(b.created_at || 0) - new Date(a.created_at || 0);
+      if (timeDiff !== 0) return timeDiff;
+      return (b.round_number || 0) - (a.round_number || 0);
+    });
+
+    const latestSellerEvent = allEvents.find((e) => {
+      const s = (e.sender || "").toUpperCase();
+      return ["SELLER_AI", "SELLER_GUARDRAIL", "MERCHANT"].includes(s);
+    });
+
+    const agreedPrice = latestSellerEvent ? Number(latestSellerEvent.proposed_price) : Number(sku.base_price);
+    const agreedQuantity = latestSellerEvent?.quantity
+      ? Number(latestSellerEvent.quantity)
+      : Number(session.quantity || allEvents[0]?.quantity || 1);
+    const totalAmount = agreedPrice * agreedQuantity;
+    console.log(agreedPrice);
+    console.log(agreedQuantity);
+    console.log(totalAmount);
+
+    // Update session to AGREED
+    await supabase
+      .from("negotiation_sessions")
+      .update({
+        status: "AGREED",
+        final_agreed_price: agreedPrice,
+      })
+      .eq("id", sessionId);
+
+    // Record buyer acceptance event
+    const { error: buyerAcceptError } = await supabase.from("offer_events").insert({
+      id: crypto.randomUUID(),
+      session_id: sessionId,
+      round_number: session.current_round,
+      sender: "BUYER",
+      quantity: agreedQuantity,
+      proposed_price: agreedPrice,
+      guardrail_clamped_price: agreedPrice,
+      is_rule_passed: true,
+      rule_reason: "Buyer accepted seller counter-offer",
+      public_justification: buyerMessage || "Buyer agreed to seller counter-offer.",
+    });
+
+    if (buyerAcceptError) {
+      console.error("Failed to record BUYER acceptance offer event:", buyerAcceptError.message);
+    }
+
+    // Direct payment settlement creation
+    const settlement = await createSettlementOrder({
+      sessionId,
+      amount: totalAmount,
+      skuCode: sku.sku_code,
+      productName: sku.name,
+      quantity: agreedQuantity,
+      unitPrice: agreedPrice,
+    });
+
+    return {
+      session_id: sessionId,
+      sku_code: sku.sku_code,
+      status: "AGREED",
+      current_round: session.current_round,
+      max_rounds: maxRounds,
+      final_agreed_price: agreedPrice,
+      quantity: agreedQuantity,
+      amount: totalAmount,
+      amount_paise: settlement.amount_paise,
+      checkout_url: settlement.checkout_url,
+      message: "Deal successfully agreed! Direct settlement order created.",
     };
   }
 
@@ -96,6 +227,10 @@ class NegotiationService {
    * Process incoming buyer move (Counter or Accept)
    */
   async processBuyerMove({ sessionId, buyerId, offeredPrice, quantity = 1, buyerMessage = "", acceptLastOffer = false }) {
+    if (acceptLastOffer) {
+      return await this.acceptOffer({ sessionId, buyerId, buyerMessage });
+    }
+
     // 1. Fetch Session with SKU and Offer Events
     const { data: session, error: sessError } = await supabase
       .from("negotiation_sessions")
@@ -134,63 +269,34 @@ class NegotiationService {
     const {policy}  = await this.getSkuandPolicy(sku.sku_code);
     const maxRounds = (policy?.max_rounds || 5);
 
-    // Sort past offer events
-    const sortedEvents = (session.offer_events || []).sort((a, b) => a.round_number - b.round_number);
-    const latestSellerEvent = [...sortedEvents].reverse().find((e) => ["SELLER_AI", "SELLER_GUARDRAIL", "MERCHANT"].includes(e.sender));
-    const lastSellerPrice = latestSellerEvent ? Number(latestSellerEvent.proposed_price) : Number(sku.base_price);
+    // Fetch latest events (use joined session.offer_events first to avoid redundant query)
+    let eventsList = Array.isArray(session.offer_events) && session.offer_events.length > 0
+      ? session.offer_events
+      : null;
 
-    // 2. Case: Buyer accepts seller's previous offer
-    if (acceptLastOffer) {
-      const agreedPrice = lastSellerPrice;
-      const totalAmount = agreedPrice * quantity;
-
-      // Update session to AGREED
-      await supabase
-        .from("negotiation_sessions")
-        .update({
-          status: "AGREED",
-          final_agreed_price: agreedPrice,
-        })
-        .eq("id", sessionId);
-
-      // Record buyer acceptance event
-      await supabase.from("offer_events").insert({
-        id: crypto.randomUUID(),
-        session_id: sessionId,
-        round_number: session.current_round,
-        sender: "BUYER",
-        quantity: quantity,
-        proposed_price: agreedPrice,
-        guardrail_clamped_price: agreedPrice,
-        is_rule_passed: true,
-        public_justification: buyerMessage || "Buyer agreed to seller counter-offer.",
-      });
-
-      // Direct payment settlement creation
-      const settlement = await createSettlementOrder({
-        sessionId,
-        amount: totalAmount,
-        skuCode: sku.sku_code,
-        productName: sku.name,
-        quantity,
-        unitPrice: agreedPrice,
-      });
-
-      return {
-        session_id: sessionId,
-        sku_code: sku.sku_code,
-        status: "AGREED",
-        current_round: session.current_round,
-        max_rounds: maxRounds,
-        final_agreed_price: agreedPrice,
-        amount: totalAmount,
-        amount_paise: settlement.amount_paise,
-        checkout_url: settlement.checkout_url,
-        message: "Deal successfully agreed! Direct settlement order created.",
-      };
+    if (!eventsList) {
+      const { data: recentEvents } = await supabase
+        .from("offer_events")
+        .select("*")
+        .eq("session_id", sessionId)
+        .order("created_at", { ascending: false });
+      eventsList = recentEvents || [];
     }
 
-    // 3. Case: Buyer makes a counter-offer
+    const sortedEvents = [...eventsList].sort((a, b) => {
+      const timeDiff = new Date(a.created_at || 0) - new Date(b.created_at || 0);
+      if (timeDiff !== 0) return timeDiff;
+      return (a.round_number || 0) - (b.round_number || 0);
+    });
+
+    const latestSellerEvent = [...sortedEvents].reverse().find((e) => {
+      const s = (e.sender || "").toUpperCase();
+      return ["SELLER_AI", "SELLER_GUARDRAIL", "MERCHANT"].includes(s);
+    });
+
+    const lastSellerPrice = latestSellerEvent ? Number(latestSellerEvent.proposed_price) : Number(sku.base_price);
+
+    // 2. Case: Buyer makes a counter-offer
     const nextRound = session.current_round + 1;
     const buyerOffer = Number(offeredPrice);
 
@@ -209,7 +315,7 @@ class NegotiationService {
     }
 
     // Record BUYER move event in Supabase
-    await supabase.from("offer_events").insert({
+    const { error: buyerMoveError } = await supabase.from("offer_events").insert({
       id: crypto.randomUUID(),
       session_id: sessionId,
       round_number: nextRound,
@@ -218,8 +324,13 @@ class NegotiationService {
       proposed_price: buyerOffer,
       guardrail_clamped_price: buyerOffer,
       is_rule_passed: true,
+      rule_reason: preCheck.reason || "Buyer proposal",
       public_justification: preCheck.sanitizedMessage,
     });
+
+    if (buyerMoveError) {
+      console.error("Failed to record BUYER move offer event:", buyerMoveError.message);
+    }
 
     // HLD Step: Seller Agent (LangGraph + Memory) <-> Toolbox (Waterfall Rules) <-> Post-Guardrail
     const graphState = await sellerAgentApp.invoke(
@@ -272,7 +383,8 @@ class NegotiationService {
 
     // HLD Step: Deal agreed? -> Yes -> Session State AGREED -> Payment Direct checkout
     if (graphStatus === "AGREED") {
-      const agreedPrice = buyerOffer;
+      console.log(finalDecision);
+      const agreedPrice = finalDecision.counter_price || finalDecision.proposed_price || buyerOffer;
       const totalAmount = agreedPrice * quantity;
 
       await supabase
@@ -284,17 +396,22 @@ class NegotiationService {
         })
         .eq("id", sessionId);
 
-      await supabase.from("offer_events").insert({
+      const { error: sellerAgreedError } = await supabase.from("offer_events").insert({
         id: crypto.randomUUID(),
         session_id: sessionId,
         round_number: nextRound,
-        sender: "SELLER_AI",
+        sender: "SELLER_GUARDRAIL",
         quantity: quantity,
         proposed_price: agreedPrice,
         guardrail_clamped_price: agreedPrice,
         is_rule_passed: true,
+        rule_reason: "Seller accepted buyer proposal",
         public_justification: finalDecision.justification,
       });
+
+      if (sellerAgreedError) {
+        console.error("Failed to record SELLER_GUARDRAIL agreed offer event:", sellerAgreedError.message);
+      }
 
       const settlement = await createSettlementOrder({
         sessionId,
@@ -350,17 +467,22 @@ class NegotiationService {
       })
       .eq("id", sessionId);
 
-    await supabase.from("offer_events").insert({
+    const { error: sellerMoveError } = await supabase.from("offer_events").insert({
       id: crypto.randomUUID(),
       session_id: sessionId,
       round_number: nextRound,
-      sender: "SELLER_AI",
+      sender: "SELLER_GUARDRAIL",
       quantity: finalDecision.counter_quantity || quantity,
       proposed_price: finalDecision.counter_price,
       guardrail_clamped_price: finalDecision.counter_price,
       is_rule_passed: true,
+      rule_reason:"Seller counter-offer",
       public_justification: finalDecision.justification,
     });
+
+    if (sellerMoveError) {
+      console.error("Failed to record SELLER_GUARDRAIL counter offer event:", sellerMoveError.message);
+    }
 
     return {
       session_id: sessionId,
@@ -463,7 +585,7 @@ class NegotiationService {
         })
         .match({ session_id: sessionId, status: "PENDING" });
 
-      await supabase.from("offer_events").insert({
+      const { error: merchantEventError } = await supabase.from("offer_events").insert({
         id: crypto.randomUUID(),
         session_id: sessionId,
         round_number: session.current_round,
@@ -472,8 +594,13 @@ class NegotiationService {
         proposed_price: agreedPrice,
         guardrail_clamped_price: agreedPrice,
         is_rule_passed: true,
+        rule_reason: merchantNotes || "Merchant approved the requested terms.",
         public_justification: merchantNotes || "Merchant approved the requested terms.",
       });
+
+      if (merchantEventError) {
+        console.error("Failed to record MERCHANT approval offer event:", merchantEventError.message);
+      }
 
       const settlement = await createSettlementOrder({
         sessionId,
@@ -530,7 +657,7 @@ class NegotiationService {
         })
         .match({ session_id: sessionId, status: "PENDING" });
 
-      await supabase.from("offer_events").insert({
+      const { error: merchantCounterError } = await supabase.from("offer_events").insert({
         id: crypto.randomUUID(),
         session_id: sessionId,
         round_number: session.current_round,
@@ -539,8 +666,13 @@ class NegotiationService {
         proposed_price: parsedCounter,
         guardrail_clamped_price: parsedCounter,
         is_rule_passed: true,
+        rule_reason: merchantNotes || `Merchant counter-offered at ₹${parsedCounter}/unit.`,
         public_justification: merchantNotes || `Merchant counter-offered at ₹${parsedCounter}/unit.`,
       });
+
+      if (merchantCounterError) {
+        console.error("Failed to record MERCHANT counter offer event:", merchantCounterError.message);
+      }
 
       return {
         session_id: sessionId,

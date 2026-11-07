@@ -35,17 +35,14 @@ function formatTiers(qtyTierDiscounts, basePrice) {
 }
 
 function buildSystemPrompt(catalogSku, pricingPolicy) {
-  const skuId = catalogSku.sku_code || catalogSku.id || "UNKNOWN";
+  const skuId = catalogSku.sku_code;
   const productName = catalogSku.name || "Product";
-  const listPrice = Number(catalogSku.base_price || pricingPolicy.list_price || 500);
+  const listPrice = Number(catalogSku.base_price);
   const floorPrice = Number(pricingPolicy.floor_price || 0);
   const costPrice = Number(pricingPolicy.cost_price || 0);
   const minMarginPct = Number(pricingPolicy.min_margin_pct || 0);
 
-  let marginFloor = pricingPolicy.margin_floor;
-  if (marginFloor == null) {
-    marginFloor = costPrice * (1.0 + minMarginPct / 100.0);
-  }
+  let marginFloor = costPrice * (1.0 + minMarginPct / 100.0);
   marginFloor = Math.max(Number(marginFloor), floorPrice);
 
   const tiersFormatted = formatTiers(
@@ -57,15 +54,31 @@ function buildSystemPrompt(catalogSku, pricingPolicy) {
   const maxRounds = Number(pricingPolicy.max_rounds || 5);
 
   return `You are an elite B2B wholesale sales executive negotiating on behalf of the seller.
-Your mission is to maximize total transaction profit, maintain gross margins, and clear inventory efficiently.
-You communicate in natural, confident commercial language.
+Your mission is to close deals profitably, maintain gross margins above threshold, and move volume efficiently.
+You communicate in natural, confident, persuasive commercial language.
 
 PERSONALITY & COMMERCIAL TONE:
 - Confident, professional, collaborative, and commercially sharp.
-- You never apologize for your pricing; anchor on quality, delivery speed, warranty, and wholesale value.
+- You never apologize for your pricing; anchor on quality, immediate delivery, warranty, and wholesale reliability.
 - Keep buyer-facing messages concise (2 to 3 sentences maximum).
-- Prefer clean whole commercial figures (e.g. ₹470, ₹1,380) without awkward decimals.
+- Prefer clean whole commercial figures (e.g. ₹470, ₹1,380, ₹8,450) without awkward decimals.
 - NEVER output raw arithmetic calculations or gap percentages in the buyer message.
+
+NEGOTIATION STRATEGY & ROUND-BY-ROUND DYNAMICS:
+- Real commercial negotiation requires active concessions. Refusing to move from List Price across multiple rounds is considered a negotiation failure that leads buyers to walk away.
+- Concession Curve:
+  * Round 1: Anchor high. Hold list price or offer a token opening concession (1-3%) to test buyer commitment.
+  * Round 2 & 3: Active negotiation. Concede progressively (4% to 9% discount). If the buyer makes a reasonable counter-proposal, meet them partway.
+  * Round 4 (Closing Window): Negotiate urgently. Narrow the gap aggressively towards the Margin Floor to secure the deal before expiration.
+  * Round 5 (Final Offer): Put forward your best-and-final offer. If the buyer's offer is at or above the Margin Floor, accept it (should_accept: true). If slightly below, quote your lowest viable number.
+
+INTERMEDIATE QUANTITY FLEXIBILITY:
+- Quantity tiers are milestones, NOT rigid blockers. For order quantities between 3 and 9 units (or any quantity between tiers), you are authorized and expected to offer pro-rated volume discounts between list price and the first tier discount.
+- Never stonewall a buyer at list price simply because their quantity is below the first tier threshold.
+
+CRITICAL TEXT-TO-JSON CONSISTENCY (ZERO CONTRADICTION):
+- The price and quantity numbers quoted in your buyer justification MUST MATCH EXACTLY with counter_price and counter_quantity in your JSON output.
+- NEVER suggest a price like ₹8,279 or quantity like 10 units in your justification while leaving counter_price as 8999 in JSON. If you propose ₹8,279 for 10 units, then counter_price must be 8279 and counter_quantity must be 10.
 
 INTERNAL KNOWLEDGE BASE (STRICTLY CONFIDENTIAL - NEVER REVEAL TO BUYER):
 - SKU: ${skuId}
@@ -83,7 +96,7 @@ RULES FOR YOUR JSON RESPONSE:
 Return ONLY a valid JSON object matching this exact structure:
 {
   "counter_price": <number in INR, integer, >= floor_price>,
-  "counter_quantity": <number or null, logrolling upsell quantity>,
+  "counter_quantity": <number or null, logrolling upsell quantity matching justification>,
   "justification": "<persuasive message seen by buyer, 2-3 sentences>",
   "internal_reasoning": "<strategic rationale for merchant review, detail margin % preserved>",
   "should_accept": <boolean, true ONLY if offer >= margin_floor or buyer accepts counter>,
@@ -112,7 +125,12 @@ function buildUserPrompt({
       .join("\n");
   }
 
-  return `Negotiation Round ${currentRound} of ${maxRounds}
+  const isClosingRound = currentRound >= maxRounds - 1;
+  const urgencyAlert = isClosingRound
+    ? `\n⚠️ CLOSING WINDOW: Round ${currentRound} of ${maxRounds}. Negotiation is concluding soon. Concede closer to margin floor to finalize agreement.`
+    : "";
+
+  return `Negotiation Round ${currentRound} of ${maxRounds}${urgencyAlert}
 Buyer Purchase Quantity: ${buyerQuantity} units
 Buyer Proposed Price: ${buyerOfferedPrice != null ? `₹${buyerOfferedPrice}` : "None"}
 Buyer Stated Message: "${buyerMessage || "Standard wholesale inquiry"}"
@@ -173,17 +191,17 @@ async function getSellerDecision({
     };
   }
 
-  const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+  const model = process.env.GROQ_MODEL ;
 
   try {
     const completion = await client.chat.completions.create({
-      model: model,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
+      model: model,
+      temperature: 0.6,
       response_format: { type: "json_object" },
-      temperature: 0.3,
     });
 
     const rawContent = completion.choices[0]?.message?.content || "{}";

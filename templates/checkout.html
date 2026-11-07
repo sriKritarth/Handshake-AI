@@ -252,8 +252,8 @@
       },
       handler: function (response) {
         // When done, simply redirect back to the session room
-        const frontendURL = "https://handshake-ai-88bv.vercel.app"
-        window.location.href = `${frontendURL}/session/{{ session_id }}?paid=true`;
+        const frontendURL = "http://localhost:3000"
+        window.location.href = `${frontendURL}/session/{{ session_id }}?paid=${Date.now()}`;
       },
       prefill: {
         name: "B2B Buyer",

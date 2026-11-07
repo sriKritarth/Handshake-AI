@@ -69,6 +69,7 @@ async function expireSession({
     proposed_price: null,
     guardrail_clamped_price: null,
     is_rule_passed: true,
+    rule_reason: "Session expired due to inactivity",
     public_justification: justification,
     created_at: expiredAt,
   });

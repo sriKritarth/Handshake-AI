@@ -15,7 +15,19 @@ app.use(express.json({
     }
 }));
 
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://checkout.razorpay.com"],
+        frameSrc: ["'self'", "https://api.razorpay.com"],
+        connectSrc: ["'self'", "https://lumberjack.razorpay.com", "https://api.razorpay.com"],
+        imgSrc: ["'self'", "data:", "https:"],
+      },
+    },
+  })
+);
 
 
 // Native JavaScript AI Negotiation Backend (Unified Express.js)

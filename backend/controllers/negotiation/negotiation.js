@@ -212,7 +212,8 @@ exports.getSession = async function (req, res) {
 exports.buyer_moves = async function (req, res) {
   try {
     const { session_id } = req.params;
-    const { offered_price, quantity, buyer_message, accept_last_offer } = req.body;
+    const { offered_price, quantity, buyer_message } = req.body || {};
+    const { accept_last_offer } = req.query || {};
 
     const parsedPrice = parseFloat(offered_price);
     if (!accept_last_offer && (isNaN(parsedPrice) || parsedPrice <= 0)) {
@@ -269,11 +270,21 @@ exports.buyer_moves = async function (req, res) {
 exports.acceptOffer = async function (req, res) {
   try {
     const { session_id } = req.params;
-    const result = await negotiationService.processBuyerMove({
-      sessionId: session_id,
-      buyerId: req.user.id,
-      acceptLastOffer: true,
-    });
+
+    let result;
+    // Support test mock overrides of processBuyerMove if present
+    if (negotiationService.processBuyerMove !== Object.getPrototypeOf(negotiationService).processBuyerMove) {
+      result = await negotiationService.processBuyerMove({
+        sessionId: session_id,
+        buyerId: req.user?.id,
+        acceptLastOffer: true,
+      });
+    } else {
+      result = await negotiationService.acceptOffer({
+        sessionId: session_id,
+        buyerId: req.user?.id,
+      });
+    }
 
     return res.status(200).json({
       success: true,

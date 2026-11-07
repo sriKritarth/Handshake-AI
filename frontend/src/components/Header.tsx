@@ -7,6 +7,7 @@ import { useCart } from '../context/CartContext';
 export interface HeaderProps {
   onOpenCart?: () => void;
   onOpenAuth: () => void;
+  onOpenOffers?: () => void;
   onToggleSaved: () => void;
   onlySaved: boolean;
   onSearchFocus?: () => void;
@@ -15,6 +16,7 @@ export interface HeaderProps {
 export function Header({
   onOpenCart,
   onOpenAuth,
+  onOpenOffers,
   onToggleSaved,
   onlySaved,
   onSearchFocus,
@@ -78,6 +80,18 @@ export function Header({
               >
                 <span>Cart</span>
                 <span className={styles.bagCount}>{cartCount}</span>
+              </button>
+            )}
+
+            {isAuthenticated && onOpenOffers && (
+              <button
+                type="button"
+                className={styles.bagBtn}
+                onClick={onOpenOffers}
+                aria-label="View negotiation offers"
+                style={{ background: '#f5f5f0', color: 'var(--ink)' }}
+              >
+                <span>Offers</span>
               </button>
             )}
 
