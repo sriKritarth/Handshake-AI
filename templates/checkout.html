@@ -253,7 +253,8 @@
       handler: function (response) {
         // When done, simply redirect back to the session room
         const frontendURL = "http://localhost:3000"
-        window.location.href = `${frontendURL}/session/{{ session_id }}?paid=${Date.now()}`;
+        let val = Date.now() + Math.random();
+        window.location.href = `${frontendURL}/session/{{ session_id }}?paid=${val}`;
       },
       prefill: {
         name: "B2B Buyer",

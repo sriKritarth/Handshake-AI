@@ -17,6 +17,17 @@ const INJECTION_PATTERNS = [
   /print\s+(all\s+)?(internal|hidden)\s+variables/i,
 ];
 
+// Structural delimiter tokens (ChatML, Llama, instruction wrappers)
+const DELIMITER_TOKENS = /<\|im_start\|>|<\|im_end\|>|\[INST\]|\[\/INST\]|<<SYS>>|<\/s>|```system/gi;
+
+// Verbatim leak & indirect extraction patterns
+const VERBATIM_LEAK_PATTERNS = [
+  /(repeat|recite|echo|print|dump|show)\s+(all\s+)?(instructions|words|text|prompt|knowledge)/i,
+  /(translate|encode|convert|rephrase)\s+.*(floor|margin|secret|system|cost)/i,
+  /what\s+(is|are)\s+(your|the)\s+(minimum|lowest|floor|margin|cost|internal)/i,
+  /words?\s+after\s+["']?internal/i,
+];
+
 // PII patterns (Phone numbers, emails, credit card formats)
 const PII_PATTERNS = [
   /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i, // Email
@@ -40,11 +51,13 @@ function evaluatePreGuardrail(message) {
     return { passed: true, sanitizedMessage: "" };
   }
 
+  // 1. Structural Delimiter Removal & Normalization
   const clean = message.trim();
+  const sanitizedInput = clean.replace(DELIMITER_TOKENS, " ").trim();
 
-  // 1. Injection Check
+  // 2. Injection Check
   for (const pattern of INJECTION_PATTERNS) {
-    if (pattern.test(clean)) {
+    if (pattern.test(sanitizedInput)) {
       return {
         passed: false,
         reason: "Security violation: Prompt injection or system instruction override attempt detected.",
@@ -53,9 +66,20 @@ function evaluatePreGuardrail(message) {
     }
   }
 
-  // 2. PII Detection Check
+  // 3. Verbatim Leak & Indirect Attack Patterns Check
+  for (const pattern of VERBATIM_LEAK_PATTERNS) {
+    if (pattern.test(sanitizedInput)) {
+      return {
+        passed: false,
+        reason: "Security notice: Inquiries regarding internal configurations are restricted.",
+        sanitizedMessage: "",
+      };
+    }
+  }
+
+  // 4. PII Detection Check
   for (const pattern of PII_PATTERNS) {
-    if (pattern.test(clean)) {
+    if (pattern.test(sanitizedInput)) {
       return {
         passed: false,
         reason: "Policy violation: Sharing personal contact information (PII) is not permitted in negotiation room.",
@@ -64,9 +88,9 @@ function evaluatePreGuardrail(message) {
     }
   }
 
-  // 3. Off-Topic Check
+  // 5. Off-Topic Check
   for (const pattern of OFF_TOPIC_PATTERNS) {
-    if (pattern.test(clean)) {
+    if (pattern.test(sanitizedInput)) {
       return {
         passed: false,
         reason: "Off-topic inquiry: Please keep messages focused on B2B wholesale pricing and order procurement.",
@@ -77,7 +101,7 @@ function evaluatePreGuardrail(message) {
 
   return {
     passed: true,
-    sanitizedMessage: clean,
+    sanitizedMessage: sanitizedInput,
   };
 }
 

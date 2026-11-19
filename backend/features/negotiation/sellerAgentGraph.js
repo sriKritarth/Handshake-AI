@@ -134,7 +134,7 @@ function routeAfterWaterfall(state) {
   }
 
   // Condition B: Terminal Expiry when round limit reached
-  if (round >= maxR) {
+  if (round > maxR) {
     return "post_guardrail";
   }
 
@@ -181,7 +181,7 @@ async function postGuardrailNode(state) {
         should_accept: true,
         needs_approval: false,
       };
-    } else if (currentRoundNum >= maxRoundsNum) {
+    } else if (currentRoundNum > maxRoundsNum) {
       const finalPrice = lastSellerPrice ? Number(lastSellerPrice) : listPrice;
       decisionToApply = {
         counter_price: finalPrice,
@@ -222,7 +222,6 @@ async function postGuardrailNode(state) {
     (r) => r.rule_name === "batch_liquidation_incentive" && r.passed
   );
   const availableStock = Number(
-    catalogSku.inventory_days ??
     catalogSku.inventory_qty ??
     catalogSku.stock_qty ??
     0
@@ -251,7 +250,7 @@ async function postGuardrailNode(state) {
       nextStatus = "PENDING_APPROVAL"; // Routed to Merchant Review Desk
     } else if (finalDecision.should_accept) {
       nextStatus = "AGREED";
-    } else if (currentRound >= maxRounds) {
+    } else if (currentRound > maxRounds) {
       nextStatus = "EXPIRED";
     }
   }

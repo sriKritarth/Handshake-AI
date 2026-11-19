@@ -249,12 +249,36 @@ function getPreApprovedCommercialTemplate(counterPrice, counterQuantity) {
 }
 
 /**
+ * Scans justification text for exact internal confidential numbers (floor price, cost price).
+ * If detected (and not the intended counter price quote), substitutes safe pre-approved commercial template.
+ */
+function scrubExactFinancials({ text, floorPrice, costPrice, counterPrice, counterQuantity }) {
+  if (!text || typeof text !== "string") {
+    return getPreApprovedCommercialTemplate(counterPrice, counterQuantity);
+  }
+
+  const quoted = Math.round(Number(counterPrice));
+  const forbiddenNumbers = [
+    floorPrice != null ? Math.round(Number(floorPrice)) : null,
+    costPrice != null ? Math.round(Number(costPrice)) : null,
+  ].filter((n) => n != null && n > 0 && n !== quoted);
+
+  for (const num of forbiddenNumbers) {
+    const regex = new RegExp(`(?:₹|rs\\.?|inr)?\\s*\\b${num}\\b`, "i");
+    if (regex.test(text)) {
+      return getPreApprovedCommercialTemplate(counterPrice, counterQuantity);
+    }
+  }
+  return text;
+}
+
+/**
  * Sanitizes LLM justification text to prevent confidential pricing leaks (SEC-AI-01).
  * Quarantines (discards) text if empty or if any forbidden keyword is detected,
  * and substitutes a deterministic safe commercial template.
  */
-function sanitizeJustification({ justification, counterPrice, counterQuantity }) {
-  if (typeof justification !== "string" || !justification.trim()) {
+function sanitizeJustification({ justification, counterPrice, counterQuantity, floorPrice, costPrice }) {
+  if (!justification || typeof justification !== "string" || !justification.trim()) {
     return getPreApprovedCommercialTemplate(counterPrice, counterQuantity);
   }
 
@@ -267,7 +291,13 @@ function sanitizeJustification({ justification, counterPrice, counterQuantity })
     return getPreApprovedCommercialTemplate(counterPrice, counterQuantity);
   }
 
-  return trimmed;
+  return scrubExactFinancials({
+    text: trimmed,
+    floorPrice,
+    costPrice,
+    counterPrice,
+    counterQuantity,
+  });
 }
 
 function applyPostLlmGuardrails({
@@ -279,7 +309,11 @@ function applyPostLlmGuardrails({
   currentRound = 1,
   maxRounds = 5,
 }) {
-  let counterPrice = Number(decision.counter_price);
+  let rawPrice = decision.counter_price;
+  if (typeof rawPrice === "string") {
+    rawPrice = parseFloat(rawPrice.replace(/[^0-9.]/g, ""));
+  }
+  let counterPrice = Number(rawPrice);
   if (isNaN(counterPrice) || counterPrice <= 0) {
     counterPrice = Number(floorPrice);
   }
@@ -301,14 +335,22 @@ function applyPostLlmGuardrails({
   // 3. Final Offer flag
   const isFinalOffer = currentRound >= maxRounds;
 
+  let rawQuantity = decision.counter_quantity;
+  if (typeof rawQuantity === "string") {
+    rawQuantity = parseFloat(rawQuantity.replace(/[^0-9.]/g, ""));
+  }
   const clampedPrice = Math.round(counterPrice);
-  const clampedQuantity = decision.counter_quantity ? Number(decision.counter_quantity) : quantity;
+  const clampedQuantity = rawQuantity && !isNaN(Number(rawQuantity)) && Number(rawQuantity) > 0
+    ? Number(rawQuantity)
+    : quantity;
 
   // 4. Sanitize Justification (SEC-AI-01: Quarantine internal leaks)
   const safeJustification = sanitizeJustification({
     justification: decision.justification,
     counterPrice: clampedPrice,
     counterQuantity: clampedQuantity,
+    floorPrice,
+    costPrice: policyDict?.cost_price,
   });
 
   return {

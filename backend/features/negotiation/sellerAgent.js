@@ -15,6 +15,18 @@ function getGroqClient() {
   return groqClient;
 }
 
+function parseCurrencyNumber(val, fallback = 0) {
+  if (typeof val === "number" && !isNaN(val) && val > 0) {
+    return val;
+  }
+  if (!val || (typeof val !== "string" && typeof val !== "number")) {
+    return fallback;
+  }
+  const clean = String(val).replace(/[^0-9.]/g, "").trim();
+  const num = parseFloat(clean);
+  return isNaN(num) || num <= 0 ? fallback : num;
+}
+
 function formatTiers(qtyTierDiscounts, basePrice) {
   if (!Array.isArray(qtyTierDiscounts) || qtyTierDiscounts.length === 0) {
     return `- Any quantity: ₹${basePrice.toFixed(2)} per unit (list price)`;
@@ -200,17 +212,20 @@ async function getSellerDecision({
         { role: "user", content: userPrompt },
       ],
       model: model,
-      temperature: 0.6,
+      temperature: 0.3,
       response_format: { type: "json_object" },
     });
 
     const rawContent = completion.choices[0]?.message?.content || "{}";
     const parsed = JSON.parse(rawContent);
 
+    const cleanCounterPrice = parseCurrencyNumber(parsed.counter_price, marginFloor);
+    const cleanCounterQty = parsed.counter_quantity ? Math.round(parseCurrencyNumber(parsed.counter_quantity, 1)) : null;
+
     return {
-      counter_price: Number(parsed.counter_price || marginFloor),
-      counter_quantity: parsed.counter_quantity ? Number(parsed.counter_quantity) : null,
-      justification: String(parsed.justification || `We can offer ₹${parsed.counter_price} per unit.`),
+      counter_price: cleanCounterPrice,
+      counter_quantity: cleanCounterQty,
+      justification: String(parsed.justification || `We can offer ₹${cleanCounterPrice} per unit.`),
       internal_reasoning: String(parsed.internal_reasoning || "Standard tier adjustment."),
       should_accept: Boolean(parsed.should_accept),
       needs_approval: Boolean(parsed.needs_approval),
@@ -236,4 +251,5 @@ module.exports = {
   getSellerDecision,
   buildSystemPrompt,
   buildUserPrompt,
+  parseCurrencyNumber,
 };

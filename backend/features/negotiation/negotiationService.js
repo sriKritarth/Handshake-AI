@@ -382,9 +382,21 @@ class NegotiationService {
     }
 
     // HLD Step: Deal agreed? -> Yes -> Session State AGREED -> Payment Direct checkout
-    if (graphStatus === "AGREED") {
-      console.log(finalDecision);
-      const agreedPrice = finalDecision.counter_price || finalDecision.proposed_price || buyerOffer;
+    if (graphStatus === "AGREED" || finalDecision?.should_accept) {
+      const floorPrice = Number(policy?.floor_price || 0);
+
+      // Reconcile agreed unit price: seller accepted buyer's bid, price MUST be buyer's proposed price
+      let agreedPrice = Number(buyerOffer);
+      if (isNaN(agreedPrice) || agreedPrice <= 0) {
+        agreedPrice = Number(finalDecision.counter_price || lastSellerPrice);
+      }
+
+      // Hard floor safety check
+      if (floorPrice > 0 && agreedPrice < floorPrice) {
+        agreedPrice = floorPrice;
+      }
+      finalDecision.counter_price = agreedPrice;
+
       const totalAmount = agreedPrice * quantity;
 
       await supabase
