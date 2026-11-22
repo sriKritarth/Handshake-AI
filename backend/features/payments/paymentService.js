@@ -1,6 +1,5 @@
 const crypto = require("crypto");
 const supabase = require("../../config/db");
-const { captureReservation } = require("./inventoryReservationService");
 require("dotenv").config();
 
 /**

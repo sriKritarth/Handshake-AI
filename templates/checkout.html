@@ -271,9 +271,12 @@
       description: "{{ product_name }} ({{ quantity }} units)",
       notes: {
         session_id: "{{ session_id }}"
-        // reservation_id: "{{ reservation_id }}"
+        
       },
       handler: async function (response) {
+        document.getElementById("checkout-view").style.display = "none";
+        document.getElementById("payment-success").style.display = "block";
+        document.getElementById("payment-id-val").innerText = response.razorpay_payment_id;
         try {
           const res = await fetch("/api/v1/checkout/{{ session_id }}/verify", {
             method: "POST",
@@ -284,7 +287,7 @@
               razorpay_signature: response.razorpay_signature
             })
           });
-          
+
         } catch (e) {
           console.error("Verify call failed:", e);
         }

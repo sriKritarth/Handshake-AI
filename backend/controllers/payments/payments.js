@@ -4,7 +4,7 @@ const path = require("path");
 require('dotenv').config();
 const { processDirectWebhook, createSettlementOrder } = require("../../features/payments/paymentService");
 const { escapeHtml } = require("../../utils/sanitize");
-const { createOrGetHoldReservation } = require("../../features/payments/inventoryReservationService");
+const crypto = require("crypto");
 
 
 const BACKEND_URL = process.env.BACKEND_URL
@@ -60,24 +60,6 @@ exports.checkout = async function (req, res) {
         const latestOffer = session.offer_events?.sort((a, b) => b.round_number - a.round_number)[0];
         const quantity = latestOffer?.quantity || 1;
         const skuCode = session.catalog_skus?.sku_code;
-
-        // Step 2: Optimistic Stock Check & HOLD Reservation (10-minute hold)
-        // const holdResult = await createOrGetHoldReservation(supabase, {
-        //     sessionId: session.id,
-        //     skuCode,
-        //     buyerId: session.buyer_id || req.user?.id,
-        //     qty: quantity,
-        //     holdDurationMinutes: 10,
-        // });
-
-        // if (!holdResult.success && holdResult.conflict) {
-        //     return res.status(409).json({
-        //         success: false,
-        //         conflict: true,
-        //         available_stock: holdResult.availableStock,
-        //         message: "Product currently held by other buyers or out of stock",
-        //     });
-        // }
 
         // 4. Calculate exact outlay
         const unitPrice = Number(session.final_agreed_price);
@@ -144,22 +126,6 @@ exports.renderCheckoutPage = async function (req, res) {
         const sortedOffers = (session.offer_events || []).sort((a, b) => b.round_number - a.round_number);
         const qty = sortedOffers[0]?.quantity || 1;
 
-        // Step 2: Optimistic Stock Check & HOLD Reservation (10-minute hold)
-        // const holdResult = await createOrGetHoldReservation(supabase, {
-        //     sessionId: session.id,
-        //     skuCode: session.catalog_skus?.sku_code,
-        //     buyerId: session.buyer_id || req.user?.id,
-        //     qty,
-        //     holdDurationMinutes: 10,
-        // });
-
-        // if (!holdResult.success && holdResult.conflict) {
-        //     return res.status(409).json({
-        //         message: "Product is in currrently hold by other buyers"
-        //     });
-        // }
-
-        // Check stock before opening Razorpay checkout         
 
         const unitPrice = Number(session.final_agreed_price);
         const amount = unitPrice * qty;
@@ -203,7 +169,6 @@ exports.renderCheckoutPage = async function (req, res) {
             amount_paise: amountPaise,
             currency: "INR",
             key_id: escapeHtml(keyId)
-            // reservation_id: escapeHtml(holdResult.reservation?.id || ""),
         };
 
         for (const [k, v] of Object.entries(replacements)) {
@@ -242,8 +207,6 @@ exports.checkout_webhook = async function (req, res) {
     }
 };
 
-const crypto = require("crypto");
-const { success } = require("zod");
 
 // In-Memory SKU Cache (5-minute TTL) to eliminate catalog DB queries on every checkout
 let skuCache = new Map();
