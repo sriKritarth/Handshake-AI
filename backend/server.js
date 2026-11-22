@@ -1,6 +1,5 @@
 const express = require("express");
 const cors = require('cors')
-const helmet = require("helmet")
 require("dotenv").config()
 const fileUpload = require("express-fileupload")
 
@@ -14,24 +13,6 @@ app.use(express.json({
         req.rawBody = buf.toString();
     }
 }));
-
-app.use(
-  helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "https://checkout.razorpay.com"],
-        frameSrc: ["'self'", "https://api.razorpay.com"],
-        connectSrc: ["'self'", "https://lumberjack.razorpay.com", "https://api.razorpay.com"],
-        imgSrc: ["'self'", "data:", "https:"],
-      },
-    },
-  })
-);
-
-
-// Native JavaScript AI Negotiation Backend (Unified Express.js)
-
 
 app.use(cors(
     {

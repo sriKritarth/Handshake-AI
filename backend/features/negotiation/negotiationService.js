@@ -177,6 +177,7 @@ class NegotiationService {
       .update({
         status: "AGREED",
         final_agreed_price: agreedPrice,
+        agreed_quantity : agreedQuantity
       })
       .eq("id", sessionId);
 
@@ -404,6 +405,7 @@ class NegotiationService {
         .update({
           status: "AGREED",
           final_agreed_price: agreedPrice,
+          agreed_quantity : quantity,
           current_round: nextRound,
         })
         .eq("id", sessionId);
@@ -585,6 +587,7 @@ class NegotiationService {
         .update({
           status: "AGREED",
           final_agreed_price: agreedPrice,
+          agreed_quantity : qty
         })
         .eq("id", sessionId);
 

@@ -1,8 +1,3 @@
-/**
- * Direct Payment Settlement Service (Without Audit Chain)
- * Feature: Payments & Settlement
- */
-
 const crypto = require("crypto");
 const supabase = require("../../config/db");
 const { captureReservation } = require("./inventoryReservationService");
@@ -11,10 +6,9 @@ require("dotenv").config();
 /**
  * Creates or retrieves a direct settlement record for an AGREED negotiation session.
  */
-async function createSettlementOrder({ sessionId, amount}) {
+async function createSettlementOrder({ sessionId, amount, buyerId, skuCode, productName, quantity, unitPrice }) {
   const amountPaise = Math.round(amount * 100);
-  const testOrderId = `order_${sessionId.replace(/-/g, "").substring(0, 16)}`;
-  const directCheckoutUrl = `/api/v1/checkout/${sessionId}/page`;
+  const directCheckoutUrl = `${process.env.BACKEND_URL}/api/v1/checkout/${sessionId}/page`;
 
   // Check if order already exists in database
   const { data: existingOrder } = await supabase
@@ -23,25 +17,63 @@ async function createSettlementOrder({ sessionId, amount}) {
     .eq("session_id", sessionId)
     .maybeSingle();
 
-  if (existingOrder){
-      
+  if (existingOrder) {
     return {
       order_id: existingOrder.razorpay_order_id,
       amount: existingOrder.amount,
       amount_paise: Math.round(Number(existingOrder.amount) * 100),
       currency: "INR",
-      checkout_url: directCheckoutUrl,
+      checkout_url: existingOrder.short_url,
       status: existingOrder.status,
     };
   }
 
-  // Insert direct settlement order into Supabase
+  const key_id = process.env.TEST_API_KEY;
+  const key_secret = process.env.TEST_KEY_SECRET;
+  let realOrderId = null;
+
+
+  if (key_id && key_secret) {
+    try {
+      const auth = Buffer.from(`${key_id}:${key_secret}`).toString("base64");
+      const rzpres = await fetch("https://api.razorpay.com/v1/orders", {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${auth}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          amount: amountPaise,
+          currency: "INR",
+          receipt: `rcpt_${Date.now()}`,
+          notes: {
+            session_id: sessionId,
+            buyer_id: buyerId ? String(buyerId) : "",
+            sku_code: skuCode || "",
+            quantity: quantity ? String(quantity) : "1",
+          },
+        }),
+      });
+
+      const rzpdata = await rzpres.json();
+      if (rzpdata && rzpdata.id) {
+        realOrderId = rzpdata.id;
+      }
+
+    } catch (error) {
+      console.error("Razorpay order creation fallback:", error.message);
+    }
+  }
+
+  console.log("Settlement Razorpay order ID:", realOrderId);
+
+
   const { data: newOrder, error } = await supabase
     .from("razorpay_orders")
     .insert({
       session_id: sessionId,
-      razorpay_order_id: testOrderId,
-      razorpay_payment_link_id: "plink_" + testOrderId.replace("order_", ""),
+      razorpay_order_id: realOrderId,
+      razorpay_payment_link_id: "plink_" + realOrderId,
       amount: amount,
       status: "CREATED",
       short_url: directCheckoutUrl,
@@ -54,7 +86,7 @@ async function createSettlementOrder({ sessionId, amount}) {
   }
 
   return {
-    order_id: testOrderId,
+    order_id: realOrderId,
     amount: amount,
     amount_paise: amountPaise,
     currency: "INR",
@@ -63,12 +95,104 @@ async function createSettlementOrder({ sessionId, amount}) {
   };
 }
 
+
+async function verify_payment(req, res) {
+  try {
+    const session_id = req.params.session_id;
+    const { razorpay_payment_id, razorpay_signature } = req.body
+    const secret = process.env.TEST_KEY_SECRET;
+
+    if (!session_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(401).json({
+        success: false,
+        message: "Payment failed , Please try again"
+      })
+    }
+
+    const { data: existingOrder } = await supabase
+      .from("razorpay_orders")
+      .select("*")
+      .eq("session_id", session_id)
+      .maybeSingle();
+
+    const order_id = existingOrder.razorpay_order_id;
+    let payloadString = order_id + "|" + razorpay_payment_id;
+    const expectedSignature = crypto
+      .createHmac("sha256", secret)
+      .update(payloadString)
+      .digest("hex");
+
+
+    if (expectedSignature === razorpay_signature && existingOrder.status !== "PAID") {
+      await supabase.from('razorpay_orders').update({ "status": "PAID" }).eq("razorpay_order_id", order_id);
+
+
+      const { data: session, error: negotiationError } = await supabase.from('negotiation_sessions').select("*").eq("id", session_id).eq("status", "AGREED").maybeSingle();
+      if (negotiationError) {
+        console.log(negotiationError.message);
+      }
+
+      if (session.status === "AGREED") {
+        await supabase
+          .from("negotiation_sessions")
+          .update({ status: "PAID" })
+          .eq("id", session_id);
+      }
+
+      let qty = session.agreed_quantity;
+      let sku_id = session.sku_id;
+
+      const { data: stock, error: stockError } = await supabase.from('catalog_skus').select("inventory_qty").eq("id", sku_id).maybeSingle();
+      if (stockError) {
+        console.log(stockError.message);
+      }
+
+      let updatedqty = stock.inventory_qty - qty;
+
+      const { data: updatedunit, error: updateError } = await supabase.from('catalog_skus').update({ "inventory_qty": updatedqty }).eq("id", sku_id).select("*");
+      if (updateError) {
+        console.log(updateError.message);
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: "Payment Successfull"
+      })
+    }
+
+    else if (existingOrder.status === "PAID") {
+      return res.status(200).json({
+        success: true,
+        message: "Payment already done"
+      })
+    }
+
+    else {
+      return res.status(409).json({
+        success: false,
+        message: "Payment unsuccessfull"
+      })
+    }
+
+
+  }
+
+  catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    })
+
+  }
+}
+
 /**
  * Verifies Razorpay Webhook signature directly using HMAC-SHA256
  * Updates session and order directly to PAID without older audit chain
  */
 async function processDirectWebhook({ signature, rawBody, body }) {
-  const secret =  process.env.TEST_KEY_SECRET ;
+  const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
 
   if (!secret) {
     throw new Error("Razorpay webhook secret is not configured on the server.");
@@ -95,124 +219,63 @@ async function processDirectWebhook({ signature, rawBody, body }) {
   }
 
   const { event, payload } = body || {};
-  const paymentCapturedEvents = ["payment.captured", "order.paid"];
-
-  if (event && paymentCapturedEvents.includes(event)) {
-    const paymentEntity = payload?.payment?.entity || {};
-    const orderEntity = payload?.order?.entity || {};
-
-    const razorpayOrderId = paymentEntity.order_id || orderEntity.id;
-    const sessionId = paymentEntity.notes?.session_id || orderEntity.notes?.session_id;
-
-    let sessionData = null;
-    let purchasedQty = Math.max(
-      1,
-      Number(paymentEntity.notes?.quantity || orderEntity.notes?.quantity || 0) || 1
-    );
-
-    if (sessionId) {
-      const sessionQuery = supabase.from("negotiation_sessions");
-      if (typeof sessionQuery.select === "function") {
-        const { data } = (await sessionQuery
-          .select("id, sku_id, offer_events(quantity, round_number)")
-          .eq("id", sessionId)
-          .maybeSingle?.()) || {};
-        sessionData = data;
-        if (sessionData?.offer_events) {
-          const latestOffer = (sessionData.offer_events || []).sort(
-            (a, b) => b.round_number - a.round_number
-          )[0];
-          if (latestOffer?.quantity) {
-            purchasedQty = Math.max(1, Number(paymentEntity.notes?.quantity || orderEntity.notes?.quantity || latestOffer.quantity) || 1);
-          }
-        }
-      }
-    }
-
-    const reservationId = paymentEntity.notes?.reservation_id || orderEntity.notes?.reservation_id;
-
-    // Step 3: Optimistic Inventory Reservation Check & Atomic Capture
-    const reservationResult = await captureReservation(supabase, {
-      reservationId,
-      sessionId,
-      purchasedQty,
-      skuId: sessionData?.sku_id,
-    });
-
-    if (reservationResult.expired) {
-      // Payment arrived after 10-minute hold expired!
-      if (razorpayOrderId) {
-        await supabase
-          .from("razorpay_orders")
-          .update({ status: "PAYMENT_EXPIRED_PENDING_REFUND" })
-          .eq("razorpay_order_id", razorpayOrderId);
-      }
-      return {
-        success: true,
-        settled: false,
-        requires_refund: true,
-        message: "Payment received after reservation expired. Stock was not deducted; flagged for merchant refund/review.",
-      };
-    }
-
-    // 1. Update razorpay_orders table to PAID
-    if (razorpayOrderId) {
-      await supabase
-        .from("razorpay_orders")
-        .update({ status: "PAID" })
-        .eq("razorpay_order_id", razorpayOrderId);
-    } else if (sessionId) {
-      await supabase
-        .from("razorpay_orders")
-        .update({ status: "PAID" })
-        .eq("session_id", sessionId);
-    }
-
-    // 2. Direct instant settlement on negotiation_sessions table
-    if (sessionId) {
+  if (event !== "payment.captured" && event !== "order.paid") {
+    return { success: true, message: "Event ignored" };
+  }
+  // 3. Extract IDs
+  const payment = payload?.payment?.entity || {};
+  const order = payload?.order?.entity || {};
+  const orderId = payment.order_id || order.id;
+  const sessionId = payment.notes?.session_id || order.notes?.session_id;
+  // 4. Idempotency Check (Duplicate delivery guard)
+  const { data: existingOrder } = await supabase
+    .from("razorpay_orders")
+    .select("status, session_id")
+    .eq(orderId ? "razorpay_order_id" : "session_id", orderId || sessionId)
+    .maybeSingle();
+  if (existingOrder?.status === "PAID") {
+    return { success: true, message: "Order already settled as PAID" };
+  }
+  const targetSessionId = sessionId || existingOrder?.session_id;
+  // 5. Update Orders Table
+  if (orderId) {
+    await supabase
+      .from("razorpay_orders")
+      .update({ status: "PAID" })
+      .eq("razorpay_order_id", orderId);
+  }
+  // 6. Settle Session & Deduct Stock
+  if (targetSessionId) {
+    const { data: session } = await supabase
+      .from("negotiation_sessions")
+      .select("id, sku_id, agreed_quantity, status")
+      .eq("id", targetSessionId)
+      .maybeSingle();
+    if (session && session.status !== "PAID") {
       await supabase
         .from("negotiation_sessions")
         .update({ status: "PAID" })
-        .eq("id", sessionId);
-
-      // If no reservation was present, fallback to legacy direct catalog stock deduction
-      if (reservationResult.noReservation && sessionData?.sku_id) {
-        const skuQuery = supabase.from("catalog_skus");
-        if (typeof skuQuery.select === "function") {
-          const { data: skuItem } = (await skuQuery
-            .select("id, inventory_qty")
-            .eq("id", sessionData.sku_id)
-            .maybeSingle?.()) || {};
-
-          if (skuItem) {
-            const currentStock = Number(
-              skuItem.inventory_qty != null ? skuItem.inventory_qty : 0
-            );
-            const newStock = Math.max(0, currentStock - purchasedQty);
-            await supabase
-              .from("catalog_skus")
-              .update({ inventory_qty: newStock })
-              .eq("id", skuItem.id);
-          }
-        }
+        .eq("id", targetSessionId);
+      const qty = session.agreed_quantity || 1;
+      const { data: sku } = await supabase
+        .from("catalog_skus")
+        .select("inventory_qty")
+        .eq("id", session.sku_id)
+        .maybeSingle();
+      if (sku) {
+        const updatedStock = Math.max(0, (sku.inventory_qty || 0) - qty);
+        await supabase
+          .from("catalog_skus")
+          .update({ inventory_qty: updatedStock })
+          .eq("id", session.sku_id);
       }
     }
-
-    return {
-      success: true,
-      settled: true,
-      message: "Order successfully settled and marked as PAID directly.",
-    };
   }
-
-  return {
-    success: true,
-    settled: false,
-    message: "Event received and acknowledged.",
-  };
+  return { success: true, message: "Payment processed and settled successfully" };
 }
 
 module.exports = {
   createSettlementOrder,
   processDirectWebhook,
+  verify_payment
 };

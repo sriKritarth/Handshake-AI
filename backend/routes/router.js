@@ -17,6 +17,7 @@ const {getPendingsesssions , counterApprove} = require("../controllers/merchant-
 const { verifySessionAccess } = require("../middleware/b2b_middleware");
 const { streamSession } = require("../controllers/events");
 const {checkout , checkout_webhook , cartCheckout, renderCheckoutPage} = require("../controllers/payments/payments")
+const {verify_payment} = require("../features/payments/paymentService");
 const {imageUpload} = require("../controllers/file-upload/cloudinary_upload")
 const {auth_limiter , api_limiter , auto_negotiate} = require("../utils/rate-limiter");
 
@@ -54,7 +55,8 @@ router.post("/sessions/:session_id/merchant_decision" , authenticateToken , requ
 
 // payments
 router.get("/checkout/:session_id" , authenticateToken , requireRole("buyer") , verifySessionAccess , checkout);
-router.get("/checkout/:session_id/page", renderCheckoutPage);
+router.get("/checkout/:session_id/page",api_limiter, renderCheckoutPage);
+router.post("/checkout/:session_id/verify", api_limiter, verify_payment);
 router.post("/checkout/cart", authenticateToken, requireRole("buyer"), cartCheckout);
 router.post("/checkout/webhook"  ,  checkout_webhook);
 

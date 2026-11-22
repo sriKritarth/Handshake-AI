@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -12,6 +13,7 @@
       padding: 0;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     }
+
     body {
       background: #0b0c10;
       color: #e2e8f0;
@@ -21,6 +23,7 @@
       justify-content: center;
       padding: 24px;
     }
+
     .checkout-card {
       background: #16181f;
       border: 1px solid #232733;
@@ -30,6 +33,7 @@
       padding: 32px;
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
     }
+
     .brand-header {
       display: flex;
       align-items: center;
@@ -38,6 +42,7 @@
       padding-bottom: 16px;
       border-bottom: 1px solid #232733;
     }
+
     .brand-title {
       font-size: 1.25rem;
       font-weight: 700;
@@ -46,6 +51,7 @@
       align-items: center;
       gap: 8px;
     }
+
     .status-badge {
       display: inline-flex;
       align-items: center;
@@ -60,6 +66,7 @@
       border-radius: 9999px;
       border: 1px solid rgba(16, 185, 129, 0.3);
     }
+
     .order-summary {
       background: #1a1e29;
       border-radius: 12px;
@@ -67,17 +74,20 @@
       margin-bottom: 24px;
       border: 1px solid #272d3b;
     }
+
     .item-title {
       font-size: 1.15rem;
       font-weight: 600;
       color: #f1f5f9;
       margin-bottom: 4px;
     }
+
     .item-subtitle {
       font-size: 0.85rem;
       color: #94a3b8;
       margin-bottom: 16px;
     }
+
     .detail-row {
       display: flex;
       justify-content: space-between;
@@ -86,6 +96,7 @@
       color: #94a3b8;
       margin-bottom: 10px;
     }
+
     .detail-row.total {
       margin-top: 14px;
       padding-top: 14px;
@@ -94,10 +105,12 @@
       font-weight: 700;
       color: #f8fafc;
     }
+
     .total-amount {
       color: #10b981;
       font-size: 1.35rem;
     }
+
     .btn-pay {
       width: 100%;
       background: #2563eb;
@@ -115,10 +128,12 @@
       transition: all 0.2s ease;
       box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
     }
+
     .btn-pay:hover {
       background: #1d4ed8;
       box-shadow: 0 6px 20px rgba(37, 99, 235, 0.45);
     }
+
     .footer-note {
       text-align: center;
       margin-top: 18px;
@@ -129,11 +144,13 @@
       justify-content: center;
       gap: 6px;
     }
+
     .paid-card {
       display: none;
       text-align: center;
       padding: 12px 0;
     }
+
     .paid-icon {
       width: 56px;
       height: 56px;
@@ -147,17 +164,20 @@
       font-size: 1.8rem;
       border: 1px solid rgba(16, 185, 129, 0.3);
     }
+
     .paid-title {
       font-size: 1.25rem;
       font-weight: 700;
       color: #f8fafc;
       margin-bottom: 6px;
     }
+
     .paid-subtitle {
       font-size: 0.875rem;
       color: #94a3b8;
       margin-bottom: 20px;
     }
+
     .paid-details {
       background: #1a1e29;
       border: 1px solid #272d3b;
@@ -167,6 +187,7 @@
       text-align: left;
       margin-bottom: 16px;
     }
+
     code {
       background: rgba(255, 255, 255, 0.08);
       padding: 2px 6px;
@@ -176,6 +197,7 @@
     }
   </style>
 </head>
+
 <body>
   <div class="checkout-card">
     <div class="brand-header">
@@ -243,17 +265,34 @@
     const options = {
       key: "{{ key_id }}",
       amount: "{{ amount_paise }}",
+      order_id: "{{order_id}}",
       currency: "{{ currency }}",
       name: "Handshake AI",
       description: "{{ product_name }} ({{ quantity }} units)",
       notes: {
-        session_id: "{{ session_id }}",
-        reservation_id: "{{ reservation_id }}"
+        session_id: "{{ session_id }}"
+        // reservation_id: "{{ reservation_id }}"
       },
-      handler: function (response) {
+      handler: async function (response) {
+        try {
+          const res = await fetch("/api/v1/checkout/{{ session_id }}/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_signature: response.razorpay_signature
+            })
+          });
+          
+        } catch (e) {
+          console.error("Verify call failed:", e);
+        }
         // When done, simply redirect back to the session room
+        // console.log("PAYMENT SUCCESSFULL" , response);
         const frontendURL = "http://localhost:3000"
         let val = Date.now() + Math.random();
+        val = Math.round(val);
         window.location.href = `${frontendURL}/session/{{ session_id }}?paid=${val}`;
       },
       prefill: {
@@ -272,4 +311,5 @@
     };
   </script>
 </body>
+
 </html>
